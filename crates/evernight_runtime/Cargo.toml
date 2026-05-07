@@ -1,0 +1,8 @@
+[package]
+name = "evernight_runtime"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+evernight_core = { path = "../evernight_core" }
+evernight_math = { path = "../evernight_math" }

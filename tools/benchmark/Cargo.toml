@@ -1,0 +1,10 @@
+[package]
+name = "benchmark"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+evernight_core = { path = "../../crates/evernight_core" }
+evernight_math = { path = "../../crates/evernight_math" }
+evernight_runtime = { path = "../../crates/evernight_runtime" }
+evernight_script = { path = "../../crates/evernight_script" }

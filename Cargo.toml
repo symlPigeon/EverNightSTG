@@ -1,0 +1,11 @@
+[workspace]
+resolver = "2"
+
+members = [
+    "crates/evernight_core",
+    "crates/evernight_math",
+    "crates/evernight_runtime",
+    "crates/evernight_script",
+
+    "tools/benchmark",
+]

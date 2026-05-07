@@ -1,0 +1,12 @@
+/target/
+
+# Build outputs
+**/*.rs.bk
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
