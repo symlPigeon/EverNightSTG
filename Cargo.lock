@@ -15,6 +15,9 @@ dependencies = [
 [[package]]
 name = "evernight_core"
 version = "0.1.0"
+dependencies = [
+ "evernight_math",
+]
 
 [[package]]
 name = "evernight_math"

@@ -1,3 +1,5 @@
+use evernight_math::Vec2;
+
 use crate::{EntityId, Tick};
 
 /// Protocol for runtime events.
@@ -18,8 +20,8 @@ pub enum EventPayload {
     Collision {
         attacker: EntityId,
         defender: EntityId,
-        contact_point: (f32, f32), // (x, y)
-        normal: (f32, f32),        // (x, y) collision normal
+        contact_point: Vec2,
+        normal: Vec2,
         tick: Tick,
     },
     /// An entity was spawned.

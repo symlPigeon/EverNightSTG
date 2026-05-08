@@ -1,5 +1,5 @@
 /// Unique identifier for an entity in the game world.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct EntityId(u32);
 
 impl EntityId {
@@ -30,7 +30,7 @@ impl Tick {
 /// Used for collision detection.
 ///
 /// Construct with a zero-based layer index (0–31); internally stores `1 << layer`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct LayerBit(u32);
 
 impl LayerBit {
@@ -66,7 +66,7 @@ impl std::ops::BitOr for LayerBit {
 /// Used by a `Hitbox` to filter which `Hurtbox` layers it should test against.
 ///
 /// Construct with zero-based layer indices, same as `LayerBit`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct CollisionMask(u32);
 
 impl CollisionMask {
@@ -100,7 +100,7 @@ impl std::ops::BitOr for CollisionMask {
 }
 
 /// A typed handle pointing to a resource or registry entry of type `T`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Handle<T> {
     id: u32,
     _marker: std::marker::PhantomData<T>,
@@ -138,3 +138,64 @@ pub enum EverNightError {
 
 /// A result type for operations in the EverNight engine, using `EverNightError` for error handling.
 pub type EverNightResult<T> = Result<T, EverNightError>;
+
+/// A bitmask for built-in entity tags (up to 64 distinct flags).
+/// Used for fast O(1) categorisation of entities by the engine.
+/// For script-defined dynamic tags, see `Tag::custom`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub struct TagFlags(pub u64);
+
+impl TagFlags {
+    pub const NONE: TagFlags = TagFlags(0);
+    pub const PLAYER: TagFlags = TagFlags(1 << 0);
+    pub const ENEMY: TagFlags = TagFlags(1 << 1);
+    pub const PLAYER_BULLET: TagFlags = TagFlags(1 << 2);
+    pub const ENEMY_BULLET: TagFlags = TagFlags(1 << 3);
+    pub const PICKUP: TagFlags = TagFlags(1 << 4);
+    pub const BOSS: TagFlags = TagFlags(1 << 5);
+    pub const INVINCIBLE: TagFlags = TagFlags(1 << 6);
+    pub const GRAZE: TagFlags = TagFlags(1 << 7);
+
+    /// Returns `true` if all bits in `other` are set in `self`.
+    pub fn has(self, other: TagFlags) -> bool {
+        self.0 & other.0 != 0
+    }
+
+    /// Returns `true` if no flags are set.
+    pub fn is_empty(self) -> bool {
+        self.0 == 0
+    }
+}
+
+impl std::ops::BitOr for TagFlags {
+    type Output = TagFlags;
+    fn bitor(self, other: TagFlags) -> TagFlags {
+        TagFlags(self.0 | other.0)
+    }
+}
+
+impl std::ops::BitOrAssign for TagFlags {
+    fn bitor_assign(&mut self, other: TagFlags) {
+        self.0 |= other.0;
+    }
+}
+
+impl std::ops::BitAnd for TagFlags {
+    type Output = TagFlags;
+    fn bitand(self, other: TagFlags) -> TagFlags {
+        TagFlags(self.0 & other.0)
+    }
+}
+
+impl std::ops::BitAndAssign for TagFlags {
+    fn bitand_assign(&mut self, other: TagFlags) {
+        self.0 &= other.0;
+    }
+}
+
+impl std::ops::Not for TagFlags {
+    type Output = TagFlags;
+    fn not(self) -> TagFlags {
+        TagFlags(!self.0)
+    }
+}

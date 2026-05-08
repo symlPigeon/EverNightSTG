@@ -24,6 +24,10 @@ impl Vec2 {
         self.x * self.x + self.y * self.y
     }
 
+    pub fn distance_to(&self, other: Vec2) -> f32 {
+        (other - *self).length()
+    }
+
     pub fn normalized(&self) -> Self {
         let len = self.length();
         if len > 0.0 {

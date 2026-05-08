@@ -1,14 +1,13 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+pub mod collision;
+pub mod commands;
+pub mod component;
+pub mod components;
+pub mod events;
+pub mod scheduler;
+pub mod systems;
+pub mod world;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+pub use {
+    collision::*, commands::*, component::*, components::*, events::*, scheduler::*, systems::*,
+    world::*,
+};
