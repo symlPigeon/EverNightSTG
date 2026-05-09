@@ -1,11 +1,9 @@
 use std::any::TypeId;
 
-use evernight_core::{Component, EntityId, EverNightResult, SpawnRequest};
-
-use crate::World;
+use evernight_core::{Component, EntityId, SpawnRequest};
 
 pub enum Command {
-    Spawn(SpawnRequest),
+    Spawn { entity: EntityId, request: SpawnRequest },
     Despawn(EntityId),
     AddComponent {
         entity: EntityId,
@@ -17,6 +15,7 @@ pub enum Command {
     },
 }
 
+#[derive(Default)]
 pub struct CommandBuffer {
     commands: Vec<Command>,
 }
@@ -32,11 +31,13 @@ impl CommandBuffer {
         self.commands.push(command);
     }
 
-    pub fn apply(&mut self, world: &mut World) -> EverNightResult<()> {
-        Ok(())
+    /// Drains all buffered commands and returns them, leaving the buffer empty.
+    pub fn drain(&mut self) -> Vec<Command> {
+        std::mem::take(&mut self.commands)
     }
 
     pub fn clear(&mut self) {
         self.commands.clear();
     }
 }
+

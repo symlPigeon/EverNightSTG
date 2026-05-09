@@ -78,4 +78,22 @@ impl ComponentStorage {
                 (*entity, component)
             })
     }
+
+    /// Inserts a dynamically-typed component. The `TypeId` is derived from `as_any().type_id()`.
+    /// Used by `CommandBuffer` when applying `Command::AddComponent`.
+    pub fn insert_boxed(&mut self, entity: EntityId, component: Box<dyn Component>) {
+        let type_id = (*component).as_any().type_id();
+        self.columns
+            .entry(type_id)
+            .or_default()
+            .insert(entity, component);
+    }
+
+    /// Removes a component by `TypeId` without needing the concrete type.
+    /// Used by `CommandBuffer` when applying `Command::RemoveComponent`.
+    pub fn remove_by_type_id(&mut self, entity: EntityId, type_id: TypeId) {
+        if let Some(column) = self.columns.get_mut(&type_id) {
+            column.remove(&entity);
+        }
+    }
 }
