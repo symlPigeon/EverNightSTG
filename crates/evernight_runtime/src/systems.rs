@@ -68,15 +68,33 @@ pub fn collision_system(
 ) {
     use evernight_math::{Vec2, detect};
 
-    // Snapshot hitbox and hurtbox data so we can iterate both without aliasing.
-    let hitboxes: Vec<(EntityId, Shape2D, CollisionMask, bool)> = storage
+    // Step 1: snapshot raw local-space hitbox and hurtbox data.
+    let raw_hitboxes: Vec<(EntityId, Shape2D, CollisionMask, bool)> = storage
         .iter::<Hitbox>()
         .map(|(id, h)| (id, h.shape.clone(), h.group, h.hit_once))
         .collect();
 
-    let hurtboxes: Vec<(EntityId, Shape2D, LayerBit)> = storage
+    let raw_hurtboxes: Vec<(EntityId, Shape2D, LayerBit)> = storage
         .iter::<Hurtbox>()
         .map(|(id, h)| (id, h.shape.clone(), h.layer))
+        .collect();
+
+    // Step 2: apply each entity's Transform to convert local-space → world-space.
+    // Entities without a Transform component are treated as at identity (origin, angle 0).
+    let hitboxes: Vec<(EntityId, Shape2D, CollisionMask, bool)> = raw_hitboxes
+        .into_iter()
+        .map(|(id, shape, group, hit_once)| {
+            let transform = storage.get::<Transform>(id).copied().unwrap_or_default();
+            (id, transform.apply_to_shape(&shape), group, hit_once)
+        })
+        .collect();
+
+    let hurtboxes: Vec<(EntityId, Shape2D, LayerBit)> = raw_hurtboxes
+        .into_iter()
+        .map(|(id, shape, layer)| {
+            let transform = storage.get::<Transform>(id).copied().unwrap_or_default();
+            (id, transform.apply_to_shape(&shape), layer)
+        })
         .collect();
 
     // Collect confirmed hits before emitting events.

@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 
 use evernight_core::{CollisionMask, LayerBit, TagFlags, Tick, impl_component};
-use evernight_math::{Angle, Shape2D, Vec2};
+use evernight_math::{Angle, Capsule, Circle, Ellipse, Line, Polygon, Ray, Rectangle, Shape2D, Triangle, Vec2};
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Transform {
@@ -18,6 +18,52 @@ impl Transform {
         Transform {
             position: Vec2::zero(),
             rotation: Angle(0.0),
+        }
+    }
+
+    /// Converts a local-space `Shape2D` to world-space by applying this transform.
+    ///
+    /// Each point is rotated by `self.rotation` then translated by `self.position`.
+    /// Direction vectors (e.g. `Ray::direction`) are only rotated, not translated.
+    pub fn apply_to_shape(&self, shape: &Shape2D) -> Shape2D {
+        let angle = self.rotation.0;
+        let pos = self.position;
+        match shape {
+            Shape2D::Circle(c) => Shape2D::Circle(Circle {
+                center: c.center.rotated(angle) + pos,
+                radius: c.radius,
+            }),
+            Shape2D::Rectangle(r) => Shape2D::Rectangle(Rectangle {
+                position: r.position.rotated(angle) + pos,
+                size: r.size,
+                rotation: Angle(r.rotation.0 + angle),
+            }),
+            Shape2D::Triangle(t) => Shape2D::Triangle(Triangle {
+                a: t.a.rotated(angle) + pos,
+                b: t.b.rotated(angle) + pos,
+                c: t.c.rotated(angle) + pos,
+            }),
+            Shape2D::Ellipse(e) => Shape2D::Ellipse(Ellipse {
+                center: e.center.rotated(angle) + pos,
+                major_axis_angle: e.major_axis_angle + angle,
+                radii: e.radii,
+            }),
+            Shape2D::Capsule(c) => Shape2D::Capsule(Capsule {
+                start: c.start.rotated(angle) + pos,
+                end: c.end.rotated(angle) + pos,
+                radius: c.radius,
+            }),
+            Shape2D::Polygon(p) => Shape2D::Polygon(Polygon {
+                vertices: p.vertices.iter().map(|v| v.rotated(angle) + pos).collect(),
+            }),
+            Shape2D::Line(l) => Shape2D::Line(Line {
+                start: l.start.rotated(angle) + pos,
+                end: l.end.rotated(angle) + pos,
+            }),
+            Shape2D::Ray(r) => Shape2D::Ray(Ray {
+                origin: r.origin.rotated(angle) + pos,
+                direction: r.direction.rotated(angle),
+            }),
         }
     }
 }

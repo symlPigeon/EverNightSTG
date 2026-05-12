@@ -1,6 +1,6 @@
 use evernight_core::{Component, EntityId, EventPayload, EverNightError, EverNightResult, IdAllocator, SpawnRequest, Tick};
 
-use crate::{Command, CommandBuffer, ComponentStorage, EventBus, collision_system, lifetime_system, movement_system};
+use crate::{Command, CommandBuffer, ComponentStorage, EventBus, Scheduler, collision_system, lifetime_system, movement_system};
 
 #[derive(Debug, Clone, Copy)]
 pub struct FixedStep {
@@ -32,7 +32,6 @@ pub struct World {
     event_bus: EventBus,
     tick: Tick,
     fixed_step: FixedStep,
-    to_despawn: Vec<EntityId>,
 }
 
 impl World {
@@ -44,7 +43,6 @@ impl World {
             event_bus: EventBus::new(),
             tick: Tick::new(0),
             fixed_step,
-            to_despawn: Vec::new(),
         }
     }
 
@@ -98,9 +96,27 @@ impl World {
         self.event_bus.events()
     }
 
-    pub fn step(&mut self) -> EverNightResult<StepResult> {
-        // 1. PreUpdate: clear the previous frame's events.
+    /// Returns `true` if the entity exists and has not been despawned.
+    pub fn is_alive(&self, entity: EntityId) -> bool {
+        self.id_allocator.is_valid(entity)
+    }
+
+    /// Iterates all entities that have component `T`, in ascending `EntityId` order.
+    pub fn iter_components<T: Component>(&self) -> impl Iterator<Item = (EntityId, &T)> {
+        self.component_storage.iter::<T>()
+    }
+
+    /// Mutably iterates all entities that have component `T`, in ascending `EntityId` order.
+    pub fn iter_components_mut<T: Component>(&mut self) -> impl Iterator<Item = (EntityId, &mut T)> {
+        self.component_storage.iter_mut::<T>()
+    }
+
+    pub fn step(&mut self, scheduler: &mut Scheduler) -> EverNightResult<StepResult> {
+        // 1. PreUpdate: clear the previous frame's events, run pre-update hooks.
         self.event_bus.clear();
+        for hook in &mut scheduler.pre_update {
+            hook(&mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, self.tick, self.fixed_step.delta_time);
+        }
 
         // 2. SpawnCommit: drain and apply all buffered commands.
         let commands = self.command_buffer.drain();
@@ -108,7 +124,7 @@ impl World {
             match command {
                 Command::Spawn { entity, request } => {
                     // Entity ID was pre-allocated in spawn_entity().
-                    // Template instantiation will be handled here once the script layer is ready.
+                    // TODO: template instantiation via component registry once script layer is ready.
                     let _ = request;
                     self.event_bus.push(EventPayload::Spawned { entity, tick: self.tick });
                 }
@@ -128,21 +144,36 @@ impl World {
                 }
             }
         }
+        for hook in &mut scheduler.post_spawn_commit {
+            hook(&mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, self.tick, self.fixed_step.delta_time);
+        }
 
         // 3. Movement: integrate velocity into position/rotation.
         movement_system(&mut self.component_storage, self.fixed_step.delta_time);
+        for hook in &mut scheduler.post_movement {
+            hook(&mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, self.tick, self.fixed_step.delta_time);
+        }
 
         // 4. Collision: detect overlaps and emit Collision events.
         collision_system(&mut self.component_storage, &mut self.event_bus, self.tick);
+        for hook in &mut scheduler.post_collision {
+            hook(&mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, self.tick, self.fixed_step.delta_time);
+        }
 
-        // 5. Lifetime: decrement counters; despawn expired entities.
+        // 5. Lifetime: decrement counters; immediately despawn expired entities.
         let expired = lifetime_system(&mut self.component_storage, &mut self.event_bus, self.tick);
         for entity in expired {
             self.component_storage.remove_all(entity);
             self.id_allocator.deallocate(entity)?;
         }
+        for hook in &mut scheduler.post_lifetime {
+            hook(&mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, self.tick, self.fixed_step.delta_time);
+        }
 
-        // 6. PostUpdate (reserved for user-defined post-frame logic).
+        // 6. PostUpdate: final user hooks before tick is incremented.
+        for hook in &mut scheduler.post_update {
+            hook(&mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, self.tick, self.fixed_step.delta_time);
+        }
 
         // 7. Advance tick.
         self.tick = Tick::new(self.tick.as_u32() + 1);
