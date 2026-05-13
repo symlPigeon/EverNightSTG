@@ -80,6 +80,70 @@ impl ComponentRegistry {
     }
 }
 
+// ── TemplateRegistry ──────────────────────────────────────────────────────────
+
+/// A no-argument factory that produces one component instance.
+pub type TemplateComponentFn = Box<dyn Fn() -> Box<dyn Component>>;
+
+/// Maps template names to ordered lists of component factories.
+///
+/// A *template* is a reusable recipe for spawning a fully-equipped entity.
+/// Each factory in the list is called once per spawn to produce an independent
+/// component instance.  Templates are identified at runtime by a stable `u32` ID.
+///
+/// # Example
+/// ```rust,ignore
+/// let bullet_id = template_registry.register("player_bullet", vec![
+///     Box::new(|| Box::new(Transform::identity())),
+///     Box::new(|| Box::new(Velocity::zero())),
+/// ]);
+/// // Later: SpawnRequest::with_template(bullet_id)
+/// ```
+#[derive(Default)]
+pub struct TemplateRegistry {
+    name_to_id: HashMap<String, u32>,
+    templates: Vec<Vec<TemplateComponentFn>>,
+}
+
+impl TemplateRegistry {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Registers a template and returns its stable `u32` ID.
+    ///
+    /// Re-registering the same name replaces the existing template but keeps the ID.
+    pub fn register(&mut self, name: &str, components: Vec<TemplateComponentFn>) -> u32 {
+        if let Some(&id) = self.name_to_id.get(name) {
+            self.templates[id as usize] = components;
+            id
+        } else {
+            let id = self.templates.len() as u32;
+            self.name_to_id.insert(name.to_string(), id);
+            self.templates.push(components);
+            id
+        }
+    }
+
+    /// Looks up the ID for a template name.
+    pub fn id_of(&self, name: &str) -> Option<u32> {
+        self.name_to_id.get(name).copied()
+    }
+
+    /// Instantiates all components for the given template ID.
+    ///
+    /// Returns `None` if the ID is out of range.  Each call produces fresh instances.
+    pub fn instantiate(&self, id: u32) -> Option<Vec<Box<dyn Component>>> {
+        self.templates.get(id as usize).map(|factories| {
+            factories.iter().map(|f| f()).collect()
+        })
+    }
+
+    pub fn is_registered(&self, name: &str) -> bool {
+        self.name_to_id.contains_key(name)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -193,5 +257,72 @@ mod tests {
         let b = reg.create("Marker", &[]).unwrap();
         assert_eq!(a.as_any().downcast_ref::<Marker>(), Some(&Marker(7)));
         assert_eq!(b.as_any().downcast_ref::<Marker>(), Some(&Marker(7)));
+    }
+
+    // ── TemplateRegistry ──────────────────────────────────────────────────────
+
+    #[test]
+    fn template_registry_register_and_instantiate() {
+        let mut reg = TemplateRegistry::new();
+        let id = reg.register(
+            "bullet",
+            vec![
+                Box::new(|| Box::new(Marker(1)) as Box<dyn evernight_core::Component>),
+                Box::new(|| Box::new(Other(2)) as Box<dyn evernight_core::Component>),
+            ],
+        );
+        let components = reg.instantiate(id).expect("should return components");
+        assert_eq!(components.len(), 2);
+        assert_eq!(components[0].as_any().downcast_ref::<Marker>(), Some(&Marker(1)));
+        assert_eq!(components[1].as_any().downcast_ref::<Other>(), Some(&Other(2)));
+    }
+
+    #[test]
+    fn template_registry_id_of_returns_stable_id() {
+        let mut reg = TemplateRegistry::new();
+        let id = reg.register("bullet", vec![]);
+        assert_eq!(reg.id_of("bullet"), Some(id));
+        assert_eq!(reg.id_of("missing"), None);
+    }
+
+    #[test]
+    fn template_registry_re_register_keeps_id() {
+        let mut reg = TemplateRegistry::new();
+        let id1 = reg.register("bullet", vec![
+            Box::new(|| Box::new(Marker(1)) as Box<dyn evernight_core::Component>),
+        ]);
+        let id2 = reg.register("bullet", vec![
+            Box::new(|| Box::new(Marker(99)) as Box<dyn evernight_core::Component>),
+        ]);
+        assert_eq!(id1, id2, "re-registering same name must reuse the same id");
+        let components = reg.instantiate(id1).unwrap();
+        assert_eq!(components[0].as_any().downcast_ref::<Marker>(), Some(&Marker(99)));
+    }
+
+    #[test]
+    fn template_registry_unknown_id_returns_none() {
+        let reg = TemplateRegistry::new();
+        assert!(reg.instantiate(999).is_none());
+    }
+
+    #[test]
+    fn template_registry_each_instantiate_produces_fresh_instances() {
+        let mut reg = TemplateRegistry::new();
+        let id = reg.register("bullet", vec![
+            Box::new(|| Box::new(Marker(42)) as Box<dyn evernight_core::Component>),
+        ]);
+        let a = reg.instantiate(id).unwrap();
+        let b = reg.instantiate(id).unwrap();
+        // Both should be equal in value, proving independent construction
+        assert_eq!(a[0].as_any().downcast_ref::<Marker>(), Some(&Marker(42)));
+        assert_eq!(b[0].as_any().downcast_ref::<Marker>(), Some(&Marker(42)));
+    }
+
+    #[test]
+    fn template_registry_is_registered() {
+        let mut reg = TemplateRegistry::new();
+        assert!(!reg.is_registered("bullet"));
+        reg.register("bullet", vec![]);
+        assert!(reg.is_registered("bullet"));
     }
 }

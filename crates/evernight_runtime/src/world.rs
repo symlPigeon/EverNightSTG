@@ -96,6 +96,29 @@ impl World {
         self.event_bus.events()
     }
 
+    /// Gets a component reference by dynamic `TypeId` (committed state only).
+    pub fn get_component_dyn(&self, entity: EntityId, type_id: std::any::TypeId) -> Option<&dyn Component> {
+        self.component_storage.get_dyn(entity, type_id)
+    }
+
+    /// Queues an `AddComponent` command with a pre-boxed component.
+    pub fn add_component_boxed(&mut self, entity: EntityId, component: Box<dyn Component>) -> EverNightResult<()> {
+        if !self.id_allocator.is_valid(entity) {
+            return Err(EverNightError::InvalidEntityId(entity));
+        }
+        self.command_buffer.push(Command::AddComponent { entity, component });
+        Ok(())
+    }
+
+    /// Queues a `RemoveComponent` command by dynamic `TypeId`.
+    pub fn remove_component_dyn(&mut self, entity: EntityId, type_id: std::any::TypeId) -> EverNightResult<()> {
+        if !self.id_allocator.is_valid(entity) {
+            return Err(EverNightError::InvalidEntityId(entity));
+        }
+        self.command_buffer.push(Command::RemoveComponent { entity, component_type_id: type_id });
+        Ok(())
+    }
+
     /// Returns `true` if the entity exists and has not been despawned.
     pub fn is_alive(&self, entity: EntityId) -> bool {
         self.id_allocator.is_valid(entity)
@@ -111,21 +134,47 @@ impl World {
         self.component_storage.iter_mut::<T>()
     }
 
-    pub fn step(&mut self, scheduler: &mut Scheduler) -> EverNightResult<StepResult> {
-        // 1. PreUpdate: clear the previous frame's events, run pre-update hooks.
-        self.event_bus.clear();
-        for hook in &mut scheduler.pre_update {
-            hook(&mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, self.tick, self.fixed_step.delta_time);
-        }
+    // ── Low-level phase methods (used by App::step and World::step) ──────────
 
-        // 2. SpawnCommit: drain and apply all buffered commands.
+    /// Clears the event bus. Must be called at the start of each frame.
+    pub fn clear_events_for_frame(&mut self) {
+        self.event_bus.clear();
+    }
+
+    /// Drains and applies all buffered commands.
+    ///
+    /// `component_factory` is an optional callback used to instantiate components listed in a
+    /// [`SpawnRequest`]. If `None` (or if the factory returns `None` for a given name), the
+    /// component is silently skipped. Pass `Some(&registry.create_fn())` from the script layer.
+    ///
+    /// Emits `Spawned` / `Despawned` events as side-effects.
+    pub fn commit_commands(
+        &mut self,
+        component_factory: Option<&dyn Fn(&str, &[u8]) -> Option<Box<dyn Component>>>,
+        template_factory: Option<&dyn Fn(u32) -> Option<Vec<Box<dyn Component>>>>,
+    ) -> EverNightResult<()> {
         let commands = self.command_buffer.drain();
         for command in commands {
             match command {
                 Command::Spawn { entity, request } => {
-                    // Entity ID was pre-allocated in spawn_entity().
-                    // TODO: template instantiation via component registry once script layer is ready.
-                    let _ = request;
+                    // Named components from the request itself
+                    if let Some(factory) = component_factory {
+                        for (name, data) in request.components() {
+                            if let Some(component) = factory(name, data) {
+                                self.component_storage.insert_boxed(entity, component);
+                            }
+                        }
+                    }
+                    // Template components (applied after named, so they can be overridden)
+                    if let Some(tf) = template_factory {
+                        if let Some(tid) = request.template_id() {
+                            if let Some(components) = tf(tid) {
+                                for component in components {
+                                    self.component_storage.insert_boxed(entity, component);
+                                }
+                            }
+                        }
+                    }
                     self.event_bus.push(EventPayload::Spawned { entity, tick: self.tick });
                 }
                 Command::Despawn(entity) => {
@@ -144,43 +193,77 @@ impl World {
                 }
             }
         }
-        for hook in &mut scheduler.post_spawn_commit {
-            hook(&mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, self.tick, self.fixed_step.delta_time);
-        }
+        Ok(())
+    }
 
-        // 3. Movement: integrate velocity into position/rotation.
+    /// Runs the movement system (velocity → position/rotation integration).
+    pub fn run_movement_system(&mut self) {
         movement_system(&mut self.component_storage, self.fixed_step.delta_time);
-        for hook in &mut scheduler.post_movement {
-            hook(&mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, self.tick, self.fixed_step.delta_time);
-        }
+    }
 
-        // 4. Collision: detect overlaps and emit Collision events.
+    /// Runs the collision system (broad-phase + narrow-phase, emits Collision events).
+    pub fn run_collision_system(&mut self) {
         collision_system(&mut self.component_storage, &mut self.event_bus, self.tick);
-        for hook in &mut scheduler.post_collision {
-            hook(&mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, self.tick, self.fixed_step.delta_time);
-        }
+    }
 
-        // 5. Lifetime: decrement counters; immediately despawn expired entities.
+    /// Runs the lifetime system and immediately despawns expired entities.
+    pub fn run_lifetime_system(&mut self) -> EverNightResult<()> {
         let expired = lifetime_system(&mut self.component_storage, &mut self.event_bus, self.tick);
         for entity in expired {
             self.component_storage.remove_all(entity);
             self.id_allocator.deallocate(entity)?;
         }
+        Ok(())
+    }
+
+    /// Advances the tick counter and returns the step result.
+    pub fn advance_tick(&mut self) -> StepResult {
+        self.tick = Tick::new(self.tick.as_u32() + 1);
+        StepResult {
+            tick: self.tick,
+            event_count: self.event_bus.events().len(),
+        }
+    }
+
+    // ── High-level orchestrated step (for pure-runtime users) ─────────────────
+
+    pub fn step(&mut self, scheduler: &mut Scheduler) -> EverNightResult<StepResult> {
+        // 1. PreUpdate
+        self.clear_events_for_frame();
+        for hook in &mut scheduler.pre_update {
+            hook(&mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, self.tick, self.fixed_step.delta_time);
+        }
+
+        // 2. SpawnCommit
+        self.commit_commands(None, None)?;
+        for hook in &mut scheduler.post_spawn_commit {
+            hook(&mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, self.tick, self.fixed_step.delta_time);
+        }
+
+        // 3. Movement
+        self.run_movement_system();
+        for hook in &mut scheduler.post_movement {
+            hook(&mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, self.tick, self.fixed_step.delta_time);
+        }
+
+        // 4. Collision
+        self.run_collision_system();
+        for hook in &mut scheduler.post_collision {
+            hook(&mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, self.tick, self.fixed_step.delta_time);
+        }
+
+        // 5. Lifetime
+        self.run_lifetime_system()?;
         for hook in &mut scheduler.post_lifetime {
             hook(&mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, self.tick, self.fixed_step.delta_time);
         }
 
-        // 6. PostUpdate: final user hooks before tick is incremented.
+        // 6. PostUpdate
         for hook in &mut scheduler.post_update {
             hook(&mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, self.tick, self.fixed_step.delta_time);
         }
 
-        // 7. Advance tick.
-        self.tick = Tick::new(self.tick.as_u32() + 1);
-
-        Ok(StepResult {
-            tick: self.tick,
-            event_count: self.event_bus.events().len(),
-        })
+        // 7. Advance tick
+        Ok(self.advance_tick())
     }
 }

@@ -8,7 +8,7 @@ pub mod systems;
 pub mod world;
 
 pub use {
-    collision::*, commands::*, component_storage::*, components::*, events::*, scheduler::*, systems::*,
+    commands::*, component_storage::*, components::*, events::*, scheduler::*, systems::*,
     world::*,
 };
 

@@ -96,4 +96,12 @@ impl ComponentStorage {
             column.remove(&entity);
         }
     }
+
+    /// Gets a component reference by dynamic `TypeId`, without knowing the concrete type.
+    pub fn get_dyn(&self, entity: EntityId, type_id: TypeId) -> Option<&dyn Component> {
+        self.columns
+            .get(&type_id)?
+            .get(&entity)
+            .map(|b| b.as_ref())
+    }
 }

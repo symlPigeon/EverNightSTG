@@ -134,6 +134,8 @@ pub enum EverNightError {
     ComponentNotFound,
     InvalidState(String),
     AllocatorFull,
+    /// Error originating from a scripting backend (e.g. Lua runtime error).
+    ScriptError(String),
 }
 
 /// A result type for operations in the EverNight engine, using `EverNightError` for error handling.
