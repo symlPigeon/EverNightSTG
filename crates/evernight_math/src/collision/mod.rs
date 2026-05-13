@@ -3,7 +3,7 @@ pub mod shapes;
 
 // Public API
 pub use detection::{CollisionResult, detect};
-pub use shapes::{Capsule, Circle, Ellipse, Line, Polygon, Ray, Rectangle, Shape2D, Triangle};
+pub use shapes::{Aabb, Capsule, Circle, Ellipse, Line, Polygon, Ray, Rectangle, Shape2D, Triangle, aabb_of};
 
 #[cfg(test)]
 mod tests {

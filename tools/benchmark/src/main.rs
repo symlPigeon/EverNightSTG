@@ -259,7 +259,7 @@ fn bm_collision_no_overlap_5k() -> BenchResult {
     let mut world = make_world();
     populate_collision(&mut world, 5_000, false);
     let mut sched = no_hooks();
-    bench("collision_no_overlap_5k  [O(n^2) stress]", 3, 10, || {
+    bench("collision_no_overlap_5k", 3, 10, || {
         world.step(&mut sched).unwrap();
     })
 }
@@ -362,7 +362,7 @@ fn main() {
         bm_lua_component_rw_10k(),
     ]);
 
-    println!("=== Collision (O(n^2) -- bottleneck visible at 5k) ===");
+    println!("=== Collision ===");
     print_results(&[
         bm_collision_no_overlap_1k(),
         bm_collision_no_overlap_5k(),

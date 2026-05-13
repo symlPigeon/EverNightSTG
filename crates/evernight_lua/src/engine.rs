@@ -51,7 +51,7 @@ impl CtxUserdata {
     /// # Safety
     /// Caller must guarantee the pointer is valid for the duration of the
     /// returned reference.
-    unsafe fn as_reg<'s>(&'s self) -> &'s LuaComponentRegistry {
+    unsafe fn as_reg(&self) -> &LuaComponentRegistry {
         unsafe { &*(self.reg_ptr as *const LuaComponentRegistry) }
     }
 }

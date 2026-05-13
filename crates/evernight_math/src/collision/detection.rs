@@ -850,7 +850,7 @@ fn ray_polygon(ray: &super::shapes::Ray, vertices: &[Vec2]) -> CollisionResult {
         let to_edge = edge_start - ray.origin;
         let t = to_edge.cross(edge) / denom;
         let u = to_edge.cross(dir) / denom;
-        if t >= 0.0 && u >= 0.0 && u <= 1.0 && t < min_t {
+        if t >= 0.0 && (0.0..=1.0).contains(&u) && t < min_t {
             min_t = t;
             contact = ray.origin + dir * t;
             let edge_normal = Vec2::new(-edge.y, edge.x).normalized();
@@ -883,7 +883,7 @@ fn line_line(a: &super::shapes::Line, b: &super::shapes::Line) -> CollisionResul
     let t = to_b.cross(d2) / denom;
     let u = to_b.cross(d1) / denom;
 
-    if t < 0.0 || t > 1.0 || u < 0.0 || u > 1.0 {
+    if !(0.0..=1.0).contains(&t) || !(0.0..=1.0).contains(&u) {
         return CollisionResult::none();
     }
 
@@ -906,7 +906,7 @@ fn ray_line(ray: &super::shapes::Ray, line: &super::shapes::Line) -> CollisionRe
     let t = to_line.cross(edge) / denom;
     let u = to_line.cross(dir) / denom;
 
-    if t < 0.0 || u < 0.0 || u > 1.0 {
+    if t < 0.0 || !(0.0..=1.0).contains(&u) {
         return CollisionResult::none();
     }
 

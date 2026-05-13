@@ -166,15 +166,13 @@ impl World {
                         }
                     }
                     // Template components (applied after named, so they can be overridden)
-                    if let Some(tf) = template_factory {
-                        if let Some(tid) = request.template_id() {
-                            if let Some(components) = tf(tid) {
+                    if let Some(tf) = template_factory
+                        && let Some(tid) = request.template_id()
+                            && let Some(components) = tf(tid) {
                                 for component in components {
                                     self.component_storage.insert_boxed(entity, component);
                                 }
                             }
-                        }
-                    }
                     self.event_bus.push(EventPayload::Spawned { entity, tick: self.tick });
                 }
                 Command::Despawn(entity) => {
