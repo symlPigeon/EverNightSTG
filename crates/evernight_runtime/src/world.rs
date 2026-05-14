@@ -1,6 +1,6 @@
-use evernight_core::{Component, EntityId, EventPayload, EverNightError, EverNightResult, IdAllocator, SpawnRequest, Tick};
+use evernight_core::{Component, EntityId, EventPayload, EverNightError, EverNightResult, IdAllocator, SpawnRequest, TagFlags, Tick};
 
-use crate::{Command, CommandBuffer, ComponentStorage, EventBus, Scheduler, collision_system, lifetime_system, movement_system};
+use crate::{Command, CommandBuffer, ComponentStorage, EventBus, Scheduler, Tag, collision_system, lifetime_system, movement_system};
 
 #[derive(Debug, Clone, Copy)]
 pub struct FixedStep {
@@ -94,6 +94,20 @@ impl World {
 
     pub fn get_events(&self) -> &[EventPayload] {
         self.event_bus.events()
+    }
+
+    /// Returns entity IDs of all entities that have a component with the given `TypeId`.
+    pub fn iter_entities_with_component(&self, type_id: std::any::TypeId) -> Vec<EntityId> {
+        self.component_storage.iter_ids_dyn(type_id).collect()
+    }
+
+    /// Returns entity IDs of all entities whose `Tag` component has the given flags set.
+    pub fn find_entities_with_tag(&self, flags: TagFlags) -> Vec<EntityId> {
+        self.component_storage
+            .iter::<Tag>()
+            .filter(|(_, tag)| tag.has_flag(flags))
+            .map(|(id, _)| id)
+            .collect()
     }
 
     /// Gets a component reference by dynamic `TypeId` (committed state only).

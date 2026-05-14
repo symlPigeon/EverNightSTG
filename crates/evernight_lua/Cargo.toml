@@ -4,11 +4,13 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-evernight_core = { path = "../evernight_core" }
-evernight_script = { path = "../evernight_script" }
+evernight_core    = { path = "../evernight_core" }
+evernight_math    = { path = "../evernight_math" }
+evernight_runtime = { path = "../evernight_runtime" }
+evernight_script  = { path = "../evernight_script" }
 
 # mlua: Lua 5.4 with vendored C source (no system Lua required).
 mlua = { version = "0.11", features = ["lua54", "vendored"] }
 
 [dev-dependencies]
-evernight_runtime = { path = "../evernight_runtime" }
+tempfile = "3"

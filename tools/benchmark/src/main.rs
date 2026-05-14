@@ -336,6 +336,152 @@ fn bm_collision_event_dispatch_lua_100() -> BenchResult {
     })
 }
 
+// ── P2/P3 feature benchmarks ──────────────────────────────────────────────────
+
+/// Cost of `ctx:iter_entities("Transform")` on 1 000 entities.
+/// Exercises ComponentStorage::iter_ids_dyn + Lua table construction.
+fn bm_lua_iter_entities_transform_1k() -> BenchResult {
+    let mut engine = LuaEngine::new().unwrap();
+    engine
+        .load(
+            r#"
+        function on_frame(ctx)
+            local ids = ctx:iter_entities("Transform")
+            local _ = #ids  -- prevent dead-code elimination
+        end
+    "#,
+        )
+        .unwrap();
+
+    let mut app = App::new(FixedStep::new_60hz());
+    for i in 0..1_000u32 {
+        let e = app.world_mut().spawn_entity(SpawnRequest::new()).unwrap();
+        let x = (i % 100) as f32 * 2.0;
+        let y = (i / 100) as f32 * 2.0;
+        app.world_mut()
+            .add_component(e, Transform::new(Vec2::new(x, y), Angle(0.0)))
+            .unwrap();
+    }
+    app.set_script_engine(Box::new(engine));
+
+    bench("lua_iter_entities_transform_1k", 20, 200, || {
+        app.step().unwrap();
+    })
+}
+
+/// Same as above but for 10 000 entities.
+fn bm_lua_iter_entities_transform_10k() -> BenchResult {
+    let mut engine = LuaEngine::new().unwrap();
+    engine
+        .load(
+            r#"
+        function on_frame(ctx)
+            local ids = ctx:iter_entities("Transform")
+            local _ = #ids
+        end
+    "#,
+        )
+        .unwrap();
+
+    let mut app = App::new(FixedStep::new_60hz());
+    for i in 0..10_000u32 {
+        let e = app.world_mut().spawn_entity(SpawnRequest::new()).unwrap();
+        let x = (i % 100) as f32 * 2.0;
+        let y = (i / 100) as f32 * 2.0;
+        app.world_mut()
+            .add_component(e, Transform::new(Vec2::new(x, y), Angle(0.0)))
+            .unwrap();
+    }
+    app.set_script_engine(Box::new(engine));
+
+    bench("lua_iter_entities_transform_10k", 5, 50, || {
+        app.step().unwrap();
+    })
+}
+
+/// 100 overlapping entities; collision events dispatched to `on_collision(ctx,…)`
+/// instead of scanned via `ctx:events()`.  Direct comparison with
+/// `collision_event_dispatch_lua_100ent` reveals per-call vs. batch-read overhead.
+fn bm_lua_on_collision_callback_100ent() -> BenchResult {
+    let mut engine = LuaEngine::new().unwrap();
+    engine
+        .load(
+            r#"
+        _G.hit_count = 0
+        function on_collision(ctx, att, def, cx, cy, nx, ny)
+            _G.hit_count = _G.hit_count + 1
+        end
+    "#,
+        )
+        .unwrap();
+
+    let mut app = App::new(FixedStep::new_60hz());
+    for _ in 0..100 {
+        let e = app.world_mut().spawn_entity(SpawnRequest::new()).unwrap();
+        app.world_mut()
+            .add_component(e, Transform::new(Vec2::zero(), Angle(0.0)))
+            .unwrap();
+        app.world_mut()
+            .add_component(
+                e,
+                Hitbox::new(
+                    Shape2D::Circle(Circle { center: Vec2::zero(), radius: 1.0 }),
+                    LayerBit::new(0),
+                    CollisionMask::new(0),
+                    false,
+                ),
+            )
+            .unwrap();
+        app.world_mut()
+            .add_component(
+                e,
+                Hurtbox::new(
+                    Shape2D::Circle(Circle { center: Vec2::zero(), radius: 1.0 }),
+                    LayerBit::new(0),
+                ),
+            )
+            .unwrap();
+    }
+    app.step().unwrap();
+    app.set_script_engine(Box::new(engine));
+
+    bench("lua_on_collision_callback_100ent", 10, 100, || {
+        app.step().unwrap();
+    })
+}
+
+/// Cost of calling `require("utils")` every frame when the module is already
+/// cached in `_LOADED`.  Should be essentially a single Lua table lookup.
+fn bm_lua_require_cached() -> BenchResult {
+    let mut engine = LuaEngine::new().unwrap();
+    engine
+        .add_module(
+            "utils",
+            r#"local M = {}
+        function M.noop() end
+        return M"#,
+        )
+        .unwrap();
+    engine
+        .load(
+            r#"
+        function on_frame(ctx)
+            local u = require("utils")
+            u.noop()
+        end
+    "#,
+        )
+        .unwrap();
+
+    let mut app = App::new(FixedStep::new_60hz());
+    app.set_script_engine(Box::new(engine));
+    app.step().unwrap(); // first call: executes module source, populates _LOADED
+
+    bench("lua_require_cached", 20, 1000, || {
+        app.step().unwrap();
+    })
+}
+
 // ── Entry point ───────────────────────────────────────────────────────────────
 
 fn main() {
@@ -369,6 +515,14 @@ fn main() {
         bm_collision_all_overlap_100(),
         bm_collision_all_overlap_500(),
         bm_collision_event_dispatch_lua_100(),
+    ]);
+
+    println!("=== P2/P3 feature benchmarks ===");
+    print_results(&[
+        bm_lua_iter_entities_transform_1k(),
+        bm_lua_iter_entities_transform_10k(),
+        bm_lua_on_collision_callback_100ent(),
+        bm_lua_require_cached(),
     ]);
 }
 

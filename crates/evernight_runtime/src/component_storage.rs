@@ -104,4 +104,12 @@ impl ComponentStorage {
             .get(&entity)
             .map(|b| b.as_ref())
     }
+
+    /// Returns entity IDs of all entities that have a component with the given `TypeId`.
+    pub fn iter_ids_dyn(&self, type_id: TypeId) -> impl Iterator<Item = EntityId> + '_ {
+        self.columns
+            .get(&type_id)
+            .into_iter()
+            .flat_map(|column| column.keys().copied())
+    }
 }

@@ -90,6 +90,12 @@ impl CollisionMask {
     pub fn as_u32(self) -> u32 {
         self.0
     }
+
+    /// Creates a `CollisionMask` directly from a raw bitmask (no layer-index conversion).
+    /// Useful when (de)serializing stored masks.
+    pub fn from_raw(raw: u32) -> Self {
+        CollisionMask(raw)
+    }
 }
 
 impl std::ops::BitOr for CollisionMask {

@@ -106,6 +106,16 @@ impl<'a> ScriptContext<'a> {
         self.world.get_events()
     }
 
+    /// Returns entity IDs of all entities that have a component with the given `TypeId`.
+    pub fn iter_entities_with_component(&self, type_id: std::any::TypeId) -> Vec<EntityId> {
+        self.world.iter_entities_with_component(type_id)
+    }
+
+    /// Returns entity IDs of all entities whose `Tag` component has the given flags set.
+    pub fn find_entities_with_tag(&self, flags: evernight_core::TagFlags) -> Vec<EntityId> {
+        self.world.find_entities_with_tag(flags)
+    }
+
     // ── Registries ────────────────────────────────────────────────────────────
 
     pub fn component_registry(&self) -> &ComponentRegistry {
