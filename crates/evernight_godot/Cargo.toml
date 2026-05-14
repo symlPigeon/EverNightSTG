@@ -1,0 +1,14 @@
+[package]
+name = "evernight_godot"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+godot = "0.5"
+evernight_lua = { path = "../evernight_lua" }
+evernight_script = { path = "../evernight_script" }
+evernight_runtime = { path = "../evernight_runtime" }
+evernight_core = { path = "../evernight_core" }

@@ -7,6 +7,7 @@ members = [
     "crates/evernight_runtime",
     "crates/evernight_script",
     "crates/evernight_lua",
+    "crates/evernight_godot",
 
     "tools/benchmark",
 ]

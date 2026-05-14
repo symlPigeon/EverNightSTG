@@ -6,6 +6,7 @@ use mlua::{Lua, RegistryKey, UserData, UserDataMethods};
 
 use crate::bindings;
 use crate::lua_component_registry::LuaComponentRegistry;
+use crate::render_cmd::{RenderCommand, RenderSender};
 
 // ── ScriptContext UserData ────────────────────────────────────────────────────
 
@@ -21,6 +22,8 @@ use crate::lua_component_registry::LuaComponentRegistry;
 struct CtxUserdata {
     ctx_ptr: *mut (),
     reg_ptr: *const (),
+    /// Optional render command sender.  `None` when no Godot bridge is attached.
+    render_tx: Option<RenderSender>,
 }
 
 // SAFETY: The engine is single-threaded and `Lua` itself is `!Send`.
@@ -228,6 +231,67 @@ impl UserData for CtxUserdata {
             eprintln!("[Lua] tick={tick}: {msg}");
             Ok(())
         });
+
+        // ── Render API ────────────────────────────────────────────────────
+        // These methods enqueue RenderCommands for the Godot bridge to apply
+        // against RenderingServer after this frame's ECS step completes.
+        // They are no-ops when no bridge is attached (render_tx is None).
+
+        // ctx:create_sprite(handle, texture_path, z_index)
+        // Creates a canvas item for `handle` displaying `texture_path`.
+        // `handle` is typically the entity ID cast to u64.
+        methods.add_method(
+            "create_sprite",
+            |_, this, (handle, texture_path, z_index): (u64, String, i32)| {
+                if let Some(tx) = &this.render_tx {
+                    let _ = tx.send(RenderCommand::CreateSprite { handle, texture_path, z_index });
+                }
+                Ok(())
+            },
+        );
+
+        // ctx:update_sprite(handle, x, y, rotation, scale_x, scale_y)
+        methods.add_method(
+            "update_sprite",
+            |_, this, (handle, x, y, rotation, scale_x, scale_y): (u64, f32, f32, f32, f32, f32)| {
+                if let Some(tx) = &this.render_tx {
+                    let _ = tx.send(RenderCommand::UpdateTransform {
+                        handle, x, y, rotation, scale_x, scale_y,
+                    });
+                }
+                Ok(())
+            },
+        );
+
+        // ctx:set_sprite_visible(handle, visible)
+        methods.add_method(
+            "set_sprite_visible",
+            |_, this, (handle, visible): (u64, bool)| {
+                if let Some(tx) = &this.render_tx {
+                    let _ = tx.send(RenderCommand::SetVisible { handle, visible });
+                }
+                Ok(())
+            },
+        );
+
+        // ctx:set_sprite_modulate(handle, r, g, b, a)
+        methods.add_method(
+            "set_sprite_modulate",
+            |_, this, (handle, r, g, b, a): (u64, f32, f32, f32, f32)| {
+                if let Some(tx) = &this.render_tx {
+                    let _ = tx.send(RenderCommand::SetModulate { handle, r, g, b, a });
+                }
+                Ok(())
+            },
+        );
+
+        // ctx:destroy_sprite(handle)
+        methods.add_method("destroy_sprite", |_, this, handle: u64| {
+            if let Some(tx) = &this.render_tx {
+                let _ = tx.send(RenderCommand::DestroySprite { handle });
+            }
+            Ok(())
+        });
     }
 }
 
@@ -263,6 +327,8 @@ pub struct LuaEngine {
     on_lifetime_fn:  Option<RegistryKey>,
     /// Registry of component types exposed to Lua scripts.
     lua_comp_reg: LuaComponentRegistry,
+    /// Optional render command channel injected by the Godot bridge.
+    render_tx: Option<RenderSender>,
 }
 
 impl LuaEngine {
@@ -282,6 +348,7 @@ impl LuaEngine {
             on_despawn_fn:   None,
             on_lifetime_fn:  None,
             lua_comp_reg: LuaComponentRegistry::new(),
+            render_tx: None,
         };
         engine.register_builtins();
         Ok(engine)
@@ -301,6 +368,15 @@ impl LuaEngine {
         modules
             .set(name, source)
             .map_err(|e| EverNightError::ScriptError(e.to_string()))
+    }
+
+    /// Injects the render command sender produced by the Godot bridge.
+    ///
+    /// Once set, Lua render methods (`ctx:create_sprite`, `ctx:update_sprite`,
+    /// etc.) will enqueue `RenderCommand` values through this sender on every
+    /// tick.  Safe to call before or after `load()`.
+    pub fn set_render_sender(&mut self, tx: RenderSender) {
+        self.render_tx = Some(tx);
     }
 
     /// Loads a Lua script from the filesystem and executes it.
@@ -452,7 +528,11 @@ impl ScriptEngine for LuaEngine {
         let on_lifetime_f: Option<mlua::Function> = fetch!(on_lifetime_fn);
 
         lua.scope(|scope| {
-            let ud = scope.create_userdata(CtxUserdata { ctx_ptr, reg_ptr })?;
+            let ud = scope.create_userdata(CtxUserdata {
+            ctx_ptr,
+            reg_ptr,
+            render_tx: self.render_tx.clone(),
+        })?;
 
             // Per-tick handler
             if let Some(f) = &on_frame_f {
