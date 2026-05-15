@@ -293,7 +293,7 @@ mod tests {
         let captured_x = Arc::new(Mutex::new(0.0_f32));
         let captured_x_clone = Arc::clone(&captured_x);
 
-        sched.add_system(Phase::PostMovement, Box::new(move |storage, _events, _cmds, _tick, _dt| {
+        sched.add_system(Phase::PostMovement, crate::PRIORITY_DEFAULT, Box::new(move |storage, _events, _cmds, _tick, _dt| {
             if let Some(t) = storage.get::<Transform>(entity) {
                 *captured_x_clone.lock().unwrap() = t.position.x;
             }

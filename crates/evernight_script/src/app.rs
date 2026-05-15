@@ -361,10 +361,12 @@ mod tests {
     use crate::ScriptEngine;
     use evernight_core::EverNightResult as EvResult;
 
+    type MockAction = Box<dyn FnMut(&mut crate::ScriptContext<'_>) -> EvResult<()>>;
+
     /// Minimal mock engine: counts `on_frame` calls and optionally runs a closure.
     struct MockEngine {
         frame_count: u32,
-        action: Option<Box<dyn FnMut(&mut crate::ScriptContext<'_>) -> EvResult<()>>>,
+        action: Option<MockAction>,
     }
 
     impl MockEngine {
@@ -609,6 +611,7 @@ mod tests {
         let hit_clone = Arc::clone(&hit);
         app.add_system(
             Phase::PostCollision,
+            PRIORITY_DEFAULT,
             Box::new(move |ctx| {
                 if ctx
                     .events()
@@ -650,6 +653,7 @@ mod tests {
 
         app.add_system(
             Phase::PostUpdate,
+            PRIORITY_DEFAULT,
             Box::new(move |ctx| {
                 // Only spawn once (when spawned is still None).
                 if spawned_clone.lock().unwrap().is_none() {
