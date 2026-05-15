@@ -1,11 +1,15 @@
 use evernight_core::{Component, EverNightResult};
-use evernight_runtime::{FixedStep, Phase, StepResult, World};
+use evernight_runtime::{FixedStep, Phase, PRIORITY_BUILTIN, StepResult, World};
 
 use crate::engine::ScriptEngine;
 use crate::{ComponentRegistry, ScriptContext, TagRegistry, TemplateComponentFn, TemplateRegistry};
 
-/// A system hook that receives a [`ScriptContext`] each frame phase.
+/// A user-facing system hook that receives a [`ScriptContext`] each frame phase.
 pub type AppHookFn = Box<dyn FnMut(&mut ScriptContext)>;
+
+/// Unified internal system type used for both built-in behaviors and user hooks.
+/// Not exposed publicly; callers use [`AppHookFn`] or `Box<dyn FnMut(&mut World)>`.
+type AppSystemFn = Box<dyn FnMut(&mut World, &ComponentRegistry, &TagRegistry)>;
 
 /// Top-level application handle for the Evernight engine.
 ///
@@ -16,7 +20,7 @@ pub type AppHookFn = Box<dyn FnMut(&mut ScriptContext)>;
 /// ```rust,ignore
 /// let mut app = App::new(FixedStep::new_60hz());
 /// app.register_component::<Transform>("Transform", |_| Box::new(Transform::identity()));
-/// app.add_system(Phase::PostCollision, Box::new(|ctx| {
+/// app.add_system(Phase::PostCollision, PRIORITY_DEFAULT, Box::new(|ctx| {
 ///     for event in ctx.events() { /* ... */ }
 /// }));
 /// loop { app.step().unwrap(); }
@@ -27,29 +31,43 @@ pub struct App {
     tag_registry: TagRegistry,
     template_registry: TemplateRegistry,
     script_engine: Option<Box<dyn ScriptEngine>>,
-    pre_update: Vec<AppHookFn>,
-    post_spawn_commit: Vec<AppHookFn>,
-    post_movement: Vec<AppHookFn>,
-    post_collision: Vec<AppHookFn>,
-    post_lifetime: Vec<AppHookFn>,
-    post_update: Vec<AppHookFn>,
+    pre_update:        Vec<(i32, AppSystemFn)>,
+    post_spawn_commit:  Vec<(i32, AppSystemFn)>,
+    pre_movement:      Vec<(i32, AppSystemFn)>,
+    post_movement:     Vec<(i32, AppSystemFn)>,
+    pre_collision:     Vec<(i32, AppSystemFn)>,
+    post_collision:    Vec<(i32, AppSystemFn)>,
+    pre_lifetime:      Vec<(i32, AppSystemFn)>,
+    post_lifetime:     Vec<(i32, AppSystemFn)>,
+    post_update:       Vec<(i32, AppSystemFn)>,
 }
 
 impl App {
     pub fn new(fixed_step: FixedStep) -> Self {
-        App {
+        let mut app = App {
             world: World::new(fixed_step),
             component_registry: ComponentRegistry::new(),
             tag_registry: TagRegistry::new(),
             template_registry: TemplateRegistry::new(),
             script_engine: None,
-            pre_update: Vec::new(),
-            post_spawn_commit: Vec::new(),
-            post_movement: Vec::new(),
-            post_collision: Vec::new(),
-            post_lifetime: Vec::new(),
-            post_update: Vec::new(),
-        }
+            pre_update:        Vec::new(),
+            post_spawn_commit:  Vec::new(),
+            pre_movement:      Vec::new(),
+            post_movement:     Vec::new(),
+            pre_collision:     Vec::new(),
+            post_collision:    Vec::new(),
+            pre_lifetime:      Vec::new(),
+            post_lifetime:     Vec::new(),
+            post_update:       Vec::new(),
+        };
+        // Register standard built-in behaviors at PRIORITY_BUILTIN so they always
+        // run before user systems in the same phase.  Both are no-ops when no
+        // entities carry the relevant components.
+        app.register_behavior(Phase::PostMovement, PRIORITY_BUILTIN,
+            Box::new(|world| world.run_bounded_system()));
+        app.register_behavior(Phase::PostCollision, PRIORITY_BUILTIN,
+            Box::new(|world| world.run_elastic_collision_system()));
+        app
     }
 
     // ── Registration ──────────────────────────────────────────────────────────
@@ -98,16 +116,41 @@ impl App {
         Ok(())
     }
 
-    /// Registers a system to run at the given [`Phase`] each frame.
-    /// Systems within the same phase are called in registration order.
-    pub fn add_system(&mut self, phase: Phase, hook: AppHookFn) {
+    /// Registers a component-driven Rust behavior for the given phase.
+    ///
+    /// The system receives raw `&mut World` access and is stored alongside user hooks
+    /// in a single priority-sorted list.  Use [`PRIORITY_BUILTIN`] so built-in
+    /// behaviors run before user systems.
+    pub fn register_behavior(&mut self, phase: Phase, priority: i32, system: Box<dyn FnMut(&mut World)>) {
+        let mut system = system;
+        let app_system: AppSystemFn = Box::new(move |world, _cr, _tr| system(world));
+        sorted_insert(self.phase_entries_mut(phase), priority, app_system);
+    }
+
+    /// Registers a user hook to run at the given [`Phase`] with the given `priority`.
+    ///
+    /// Lower priority value → runs earlier.  Use [`PRIORITY_DEFAULT`] for typical
+    /// user systems.  Equal-priority hooks run in registration order (FIFO).
+    pub fn add_system(&mut self, phase: Phase, priority: i32, hook: AppHookFn) {
+        let mut hook = hook;
+        let app_system: AppSystemFn = Box::new(move |world, cr, tr| {
+            let mut ctx = ScriptContext::new(world, cr, tr);
+            hook(&mut ctx);
+        });
+        sorted_insert(self.phase_entries_mut(phase), priority, app_system);
+    }
+
+    fn phase_entries_mut(&mut self, phase: Phase) -> &mut Vec<(i32, AppSystemFn)> {
         match phase {
-            Phase::PreUpdate => self.pre_update.push(hook),
-            Phase::PostSpawnCommit => self.post_spawn_commit.push(hook),
-            Phase::PostMovement => self.post_movement.push(hook),
-            Phase::PostCollision => self.post_collision.push(hook),
-            Phase::PostLifetime => self.post_lifetime.push(hook),
-            Phase::PostUpdate => self.post_update.push(hook),
+            Phase::PreUpdate       => &mut self.pre_update,
+            Phase::PostSpawnCommit => &mut self.post_spawn_commit,
+            Phase::PreMovement     => &mut self.pre_movement,
+            Phase::PostMovement    => &mut self.post_movement,
+            Phase::PreCollision    => &mut self.pre_collision,
+            Phase::PostCollision   => &mut self.post_collision,
+            Phase::PreLifetime     => &mut self.pre_lifetime,
+            Phase::PostLifetime    => &mut self.post_lifetime,
+            Phase::PostUpdate      => &mut self.post_update,
         }
     }
 
@@ -130,55 +173,35 @@ impl App {
 
     /// Advances the simulation by one fixed-step tick.
     ///
-    /// Execution order:
-    /// 1. PreUpdate — event bus cleared, then user hooks run
-    /// 2. SpawnCommit — buffered commands applied, then user hooks run
-    /// 3. Movement — velocity integrated into position, then user hooks run
-    /// 4. Collision — overlap events emitted, then user hooks run
-    /// 5. Lifetime — expired entities despawned, then user hooks run
-    /// 6. PostUpdate — final user hooks
-    /// 7. Tick counter advanced
+    /// Execution order per tick:
+    /// 1. `PreUpdate` hooks → event bus cleared
+    /// 2. SpawnCommit → `PostSpawnCommit` hooks
+    /// 3. `PreMovement` hooks → movement system → `PostMovement` hooks
+    /// 4. `PreCollision` hooks → collision system → `PostCollision` hooks
+    /// 5. ScriptEngine `on_frame`
+    /// 6. `PreLifetime` hooks → lifetime system → `PostLifetime` hooks
+    /// 7. `PostUpdate` hooks → tick advanced
     pub fn step(&mut self) -> EverNightResult<StepResult> {
         // 1. PreUpdate
         self.world.clear_events_for_frame();
-        run_hooks(
-            &mut self.pre_update,
-            &mut self.world,
-            &self.component_registry,
-            &self.tag_registry,
-        );
+        run_app_phase(&mut self.pre_update, &mut self.world, &self.component_registry, &self.tag_registry);
 
         // 2. SpawnCommit
         let factory = |name: &str, data: &[u8]| self.component_registry.create(name, data);
         let tmpl_factory = |id: u32| self.template_registry.instantiate(id);
         self.world
             .commit_commands(Some(&factory), Some(&tmpl_factory))?;
-        run_hooks(
-            &mut self.post_spawn_commit,
-            &mut self.world,
-            &self.component_registry,
-            &self.tag_registry,
-        );
+        run_app_phase(&mut self.post_spawn_commit, &mut self.world, &self.component_registry, &self.tag_registry);
 
         // 3. Movement
+        run_app_phase(&mut self.pre_movement, &mut self.world, &self.component_registry, &self.tag_registry);
         self.world.run_movement_system();
-        self.world.run_bounded_system();
-        run_hooks(
-            &mut self.post_movement,
-            &mut self.world,
-            &self.component_registry,
-            &self.tag_registry,
-        );
+        run_app_phase(&mut self.post_movement, &mut self.world, &self.component_registry, &self.tag_registry);
 
         // 4. Collision
+        run_app_phase(&mut self.pre_collision, &mut self.world, &self.component_registry, &self.tag_registry);
         self.world.run_collision_system();
-        self.world.run_elastic_collision_system();
-        run_hooks(
-            &mut self.post_collision,
-            &mut self.world,
-            &self.component_registry,
-            &self.tag_registry,
-        );
+        run_app_phase(&mut self.post_collision, &mut self.world, &self.component_registry, &self.tag_registry);
 
         // 7. ScriptEngine::on_frame (after collision, before lifetime so scripts
         //    can still queue despawns that lifetime will clean up this tick)
@@ -191,38 +214,35 @@ impl App {
             engine.on_frame(&mut ctx)?;
         }
 
-        // 6. Lifetime
+        // 5. PreLifetime
+        run_app_phase(&mut self.pre_lifetime, &mut self.world, &self.component_registry, &self.tag_registry);
         self.world.run_lifetime_system()?;
-        run_hooks(
-            &mut self.post_lifetime,
-            &mut self.world,
-            &self.component_registry,
-            &self.tag_registry,
-        );
+        run_app_phase(&mut self.post_lifetime, &mut self.world, &self.component_registry, &self.tag_registry);
 
-        // 8. PostUpdate
-        run_hooks(
-            &mut self.post_update,
-            &mut self.world,
-            &self.component_registry,
-            &self.tag_registry,
-        );
+        // 6. PostUpdate
+        run_app_phase(&mut self.post_update, &mut self.world, &self.component_registry, &self.tag_registry);
 
-        // 9. Advance tick
+        // 7. Advance tick
         Ok(self.world.advance_tick())
     }
 }
 
-fn run_hooks(
-    hooks: &mut Vec<AppHookFn>,
+/// Runs every system in `entries` (priority-sorted) with the shared frame resources.
+fn run_app_phase(
+    entries: &mut Vec<(i32, AppSystemFn)>,
     world: &mut World,
     component_registry: &ComponentRegistry,
     tag_registry: &TagRegistry,
 ) {
-    for hook in hooks.iter_mut() {
-        let mut ctx = ScriptContext::new(world, component_registry, tag_registry);
-        hook(&mut ctx);
+    for (_, system) in entries.iter_mut() {
+        system(world, component_registry, tag_registry);
     }
+}
+
+/// Inserts `system` into a priority-sorted vec, maintaining FIFO order for equal priorities.
+fn sorted_insert(entries: &mut Vec<(i32, AppSystemFn)>, priority: i32, system: AppSystemFn) {
+    let pos = entries.partition_point(|e| e.0 <= priority);
+    entries.insert(pos, (priority, system));
 }
 
 #[cfg(test)]
@@ -234,7 +254,7 @@ mod tests {
     };
     use evernight_math::{Angle, Vec2};
     use evernight_math::{Circle, Shape2D};
-    use evernight_runtime::{FixedStep, Hitbox, Hurtbox, Lifetime, Phase, Transform, Velocity};
+    use evernight_runtime::{FixedStep, Hitbox, Hurtbox, Lifetime, Phase, PRIORITY_DEFAULT, Transform, Velocity};
 
     use super::App;
 
@@ -256,6 +276,7 @@ mod tests {
         let mut app = make_app();
         app.add_system(
             Phase::PreUpdate,
+            PRIORITY_DEFAULT,
             Box::new(|ctx| {
                 ctx.spawn(SpawnRequest::new()).unwrap();
             }),
@@ -280,6 +301,7 @@ mod tests {
         // Despawn it via a hook in the second step.
         app.add_system(
             Phase::PreUpdate,
+            PRIORITY_DEFAULT,
             Box::new(move |ctx| {
                 ctx.despawn(entity).unwrap();
             }),
@@ -324,6 +346,7 @@ mod tests {
         let captured_clone = Arc::clone(&captured);
         app.add_system(
             Phase::PostUpdate,
+            PRIORITY_DEFAULT,
             Box::new(move |ctx| {
                 *captured_clone.lock().unwrap() = ctx.tag_registry().id_of("invincible");
             }),

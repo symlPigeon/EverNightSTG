@@ -1,9 +1,23 @@
 use evernight_core::{Component, EntityId, EventPayload, EverNightError, EverNightResult, IdAllocator, SpawnRequest, TagFlags, Tick};
 
 use crate::{
-    Command, CommandBuffer, ComponentStorage, EventBus, Scheduler, Tag,
+    Command, CommandBuffer, ComponentStorage, EventBus, Scheduler, SystemEntry, Tag,
     bounded_system, collision_system, elastic_collision_system, lifetime_system, movement_system,
 };
+
+/// Runs every [`SystemEntry`] in `entries` in priority order, passing the common frame resources.
+fn run_phase(
+    entries: &mut Vec<SystemEntry>,
+    storage: &mut ComponentStorage,
+    event_bus: &mut EventBus,
+    cmd_buf: &mut CommandBuffer,
+    tick: Tick,
+    dt: f32,
+) {
+    for entry in entries.iter_mut() {
+        (entry.system)(storage, event_bus, cmd_buf, tick, dt);
+    }
+}
 
 #[derive(Debug, Clone, Copy)]
 pub struct FixedStep {
@@ -271,42 +285,34 @@ impl World {
     // ── High-level orchestrated step (for pure-runtime users) ─────────────────
 
     pub fn step(&mut self, scheduler: &mut Scheduler) -> EverNightResult<StepResult> {
+        let dt = self.fixed_step.delta_time;
+        let tick = self.tick;
+
         // 1. PreUpdate
         self.clear_events_for_frame();
-        for hook in &mut scheduler.pre_update {
-            hook(&mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, self.tick, self.fixed_step.delta_time);
-        }
+        run_phase(&mut scheduler.pre_update, &mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, tick, dt);
 
         // 2. SpawnCommit
         self.commit_commands(None, None)?;
-        for hook in &mut scheduler.post_spawn_commit {
-            hook(&mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, self.tick, self.fixed_step.delta_time);
-        }
+        run_phase(&mut scheduler.post_spawn_commit, &mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, tick, dt);
 
         // 3. Movement
+        run_phase(&mut scheduler.pre_movement, &mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, tick, dt);
         self.run_movement_system();
-        self.run_bounded_system();
-        for hook in &mut scheduler.post_movement {
-            hook(&mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, self.tick, self.fixed_step.delta_time);
-        }
+        run_phase(&mut scheduler.post_movement, &mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, tick, dt);
 
         // 4. Collision
+        run_phase(&mut scheduler.pre_collision, &mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, tick, dt);
         self.run_collision_system();
-        self.run_elastic_collision_system();
-        for hook in &mut scheduler.post_collision {
-            hook(&mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, self.tick, self.fixed_step.delta_time);
-        }
+        run_phase(&mut scheduler.post_collision, &mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, tick, dt);
 
         // 5. Lifetime
+        run_phase(&mut scheduler.pre_lifetime, &mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, tick, dt);
         self.run_lifetime_system()?;
-        for hook in &mut scheduler.post_lifetime {
-            hook(&mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, self.tick, self.fixed_step.delta_time);
-        }
+        run_phase(&mut scheduler.post_lifetime, &mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, tick, dt);
 
         // 6. PostUpdate
-        for hook in &mut scheduler.post_update {
-            hook(&mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, self.tick, self.fixed_step.delta_time);
-        }
+        run_phase(&mut scheduler.post_update, &mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, tick, dt);
 
         // 7. Advance tick
         Ok(self.advance_tick())
