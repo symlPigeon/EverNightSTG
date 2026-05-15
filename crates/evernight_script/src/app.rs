@@ -225,6 +225,86 @@ impl App {
         // 7. Advance tick
         Ok(self.world.advance_tick())
     }
+
+    /// Like [`step`](App::step) but also returns a per-phase timing breakdown.
+    ///
+    /// Only available when the `benchmark` feature is enabled.
+    #[cfg(feature = "benchmark")]
+    pub fn step_profiled(
+        &mut self,
+    ) -> EverNightResult<(StepResult, evernight_benchmark::AppFrameProfile)> {
+        use std::time::Instant;
+        use evernight_benchmark::AppFrameProfile;
+
+        let mut p = AppFrameProfile::default();
+
+        macro_rules! time_phase {
+            ($field:ident, $phase:ident) => {{
+                let _t = Instant::now();
+                run_app_phase(
+                    &mut self.$phase,
+                    &mut self.world,
+                    &self.component_registry,
+                    &self.tag_registry,
+                );
+                p.$field = _t.elapsed();
+            }};
+        }
+
+        macro_rules! time {
+            ($field:ident, $body:expr) => {{
+                let _t = Instant::now();
+                $body;
+                p.$field = _t.elapsed();
+            }};
+        }
+
+        // 1. PreUpdate
+        time!(pre_update, {
+            self.world.clear_events_for_frame();
+            run_app_phase(&mut self.pre_update, &mut self.world, &self.component_registry, &self.tag_registry);
+        });
+
+        // 2. SpawnCommit
+        time!(spawn_commit, {
+            let factory = |name: &str, data: &[u8]| self.component_registry.create(name, data);
+            let tmpl_factory = |id: u32| self.template_registry.instantiate(id);
+            self.world.commit_commands(Some(&factory), Some(&tmpl_factory))?;
+        });
+        time_phase!(post_spawn_commit, post_spawn_commit);
+
+        // 3. Movement
+        time_phase!(pre_movement, pre_movement);
+        time!(movement,      self.world.run_movement_system());
+        time_phase!(post_movement, post_movement);
+
+        // 4. Collision
+        time_phase!(pre_collision, pre_collision);
+        time!(collision,     self.world.run_collision_system());
+        time_phase!(post_collision, post_collision);
+
+        // ScriptEngine::on_frame
+        time!(script_on_frame, {
+            if let Some(ref mut engine) = self.script_engine {
+                let mut ctx = ScriptContext::new(
+                    &mut self.world,
+                    &self.component_registry,
+                    &self.tag_registry,
+                );
+                engine.on_frame(&mut ctx)?;
+            }
+        });
+
+        // 5. Lifetime
+        time_phase!(pre_lifetime, pre_lifetime);
+        time!(lifetime,      self.world.run_lifetime_system()?);
+        time_phase!(post_lifetime, post_lifetime);
+
+        // 6. PostUpdate
+        time_phase!(post_update, post_update);
+
+        Ok((self.world.advance_tick(), p))
+    }
 }
 
 /// Runs every system in `entries` (priority-sorted) with the shared frame resources.

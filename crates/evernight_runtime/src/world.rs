@@ -317,4 +317,47 @@ impl World {
         // 7. Advance tick
         Ok(self.advance_tick())
     }
+
+    /// Like [`step`](World::step) but also returns a per-phase timing breakdown.
+    ///
+    /// Only available when the `benchmark` feature is enabled.
+    #[cfg(feature = "benchmark")]
+    pub fn step_profiled(
+        &mut self,
+        scheduler: &mut Scheduler,
+    ) -> EverNightResult<(StepResult, evernight_benchmark::WorldFrameProfile)> {
+        use std::time::Instant;
+        use evernight_benchmark::WorldFrameProfile;
+
+        let mut p = WorldFrameProfile::default();
+        let dt   = self.fixed_step.delta_time;
+        let tick = self.tick;
+
+        macro_rules! time {
+            ($field:ident, $body:expr) => {{
+                let _t = Instant::now();
+                $body;
+                p.$field = _t.elapsed();
+            }};
+        }
+
+        time!(pre_update, {
+            self.clear_events_for_frame();
+            run_phase(&mut scheduler.pre_update, &mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, tick, dt);
+        });
+        time!(spawn_commit,      self.commit_commands(None, None)?);
+        time!(post_spawn_commit, run_phase(&mut scheduler.post_spawn_commit, &mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, tick, dt));
+        time!(pre_movement,      run_phase(&mut scheduler.pre_movement,      &mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, tick, dt));
+        time!(movement,          self.run_movement_system());
+        time!(post_movement,     run_phase(&mut scheduler.post_movement,     &mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, tick, dt));
+        time!(pre_collision,     run_phase(&mut scheduler.pre_collision,     &mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, tick, dt));
+        time!(collision,         self.run_collision_system());
+        time!(post_collision,    run_phase(&mut scheduler.post_collision,    &mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, tick, dt));
+        time!(pre_lifetime,      run_phase(&mut scheduler.pre_lifetime,      &mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, tick, dt));
+        time!(lifetime,          self.run_lifetime_system()?);
+        time!(post_lifetime,     run_phase(&mut scheduler.post_lifetime,     &mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, tick, dt));
+        time!(post_update,       run_phase(&mut scheduler.post_update,       &mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, tick, dt));
+
+        Ok((self.advance_tick(), p))
+    }
 }

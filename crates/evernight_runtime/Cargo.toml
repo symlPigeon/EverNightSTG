@@ -5,8 +5,10 @@ edition = "2024"
 
 [features]
 multithread = ["dep:rayon"]
+benchmark   = ["dep:evernight_benchmark"]
 
 [dependencies]
-evernight_core = { path = "../evernight_core" }
-evernight_math = { path = "../evernight_math" }
-rayon          = { version = "1", optional = true }
+evernight_core      = { path = "../evernight_core" }
+evernight_math      = { path = "../evernight_math" }
+evernight_benchmark = { path = "../evernight_benchmark", optional = true }
+rayon               = { version = "1", optional = true }

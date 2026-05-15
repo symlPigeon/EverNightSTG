@@ -1,55 +1,12 @@
-use std::time::{Duration, Instant};
-
+use evernight_benchmark::{
+    AppFrameProfile, BenchResult, ProfileAccumulator, WorldFrameProfile,
+    bench, print_profile_report, print_results,
+};
 use evernight_core::{CollisionMask, EntityId, LayerBit, SpawnRequest, impl_component};
 use evernight_lua::LuaEngine;
 use evernight_math::{Angle, Circle, Shape2D, Vec2};
 use evernight_runtime::{FixedStep, Hitbox, Hurtbox, Scheduler, Transform, Velocity, World};
 use evernight_script::{App, ScriptEngine};
-
-// ── Tiny benchmark harness ────────────────────────────────────────────────────
-
-struct BenchResult {
-    name: &'static str,
-    #[allow(dead_code)]
-    warmup: u32,
-    iterations: u32,
-    total: Duration,
-}
-
-impl BenchResult {
-    fn us_per_iter(&self) -> f64 {
-        self.total.as_nanos() as f64 / self.iterations as f64 / 1_000.0
-    }
-    fn iters_per_sec(&self) -> f64 {
-        1_000_000_000.0 / (self.total.as_nanos() as f64 / self.iterations as f64)
-    }
-}
-
-fn bench<F: FnMut()>(name: &'static str, warmup: u32, iterations: u32, mut f: F) -> BenchResult {
-    for _ in 0..warmup {
-        f();
-    }
-    let start = Instant::now();
-    for _ in 0..iterations {
-        f();
-    }
-    BenchResult { name, warmup, iterations, total: start.elapsed() }
-}
-
-fn print_results(results: &[BenchResult]) {
-    println!(
-        "{:<48} {:>8} {:>14} {:>12}",
-        "benchmark", "iters", "us/iter", "iter/s"
-    );
-    println!("{}", "-".repeat(86));
-    for r in results {
-        println!(
-            "{:<48} {:>8} {:>14.2} {:>12.0}",
-            r.name, r.iterations, r.us_per_iter(), r.iters_per_sec(),
-        );
-    }
-    println!();
-}
 
 // ── Setup helpers ─────────────────────────────────────────────────────────────
 
@@ -482,6 +439,80 @@ fn bm_lua_require_cached() -> BenchResult {
     })
 }
 
+// ── Phase-breakdown profile benchmarks ───────────────────────────────────────
+
+fn profile_world(
+    name: &str,
+    world: &mut World,
+    sched: &mut Scheduler,
+    warmup: u32,
+    frames: u32,
+) {
+    for _ in 0..warmup {
+        world.step_profiled(sched).unwrap();
+    }
+    let mut acc: ProfileAccumulator<WorldFrameProfile> = ProfileAccumulator::new();
+    for _ in 0..frames {
+        let (_, p) = world.step_profiled(sched).unwrap();
+        acc.push(p);
+    }
+    print_profile_report(name, &acc);
+}
+
+fn profile_app(name: &str, app: &mut App, warmup: u32, frames: u32) {
+    for _ in 0..warmup {
+        app.step_profiled().unwrap();
+    }
+    let mut acc: ProfileAccumulator<AppFrameProfile> = ProfileAccumulator::new();
+    for _ in 0..frames {
+        let (_, p) = app.step_profiled().unwrap();
+        acc.push(p);
+    }
+    print_profile_report(name, &acc);
+}
+
+fn run_profile_benchmarks() {
+    println!("=== Phase breakdown profiles ===\n");
+
+    // World: empty
+    {
+        let mut world = make_world();
+        let mut sched = no_hooks();
+        profile_world("world_empty", &mut world, &mut sched, 50, 500);
+    }
+
+    // World: 1k moving entities
+    {
+        let mut world = make_world();
+        populate_moving(&mut world, 1_000);
+        let mut sched = no_hooks();
+        profile_world("world_1k_movement", &mut world, &mut sched, 50, 500);
+    }
+
+    // World: 100 all-overlapping entities (collision heavy)
+    {
+        let mut world = make_world();
+        populate_collision(&mut world, 100, true);
+        let mut sched = no_hooks();
+        profile_world("world_100_all_overlap_collision", &mut world, &mut sched, 20, 200);
+    }
+
+    // App: Lua noop
+    {
+        let mut engine = LuaEngine::new().unwrap();
+        engine.load("function on_frame(ctx) end").unwrap();
+        let mut app = App::new(FixedStep::new_60hz());
+        app.set_script_engine(Box::new(engine));
+        profile_app("app_lua_noop", &mut app, 50, 500);
+    }
+
+    // App: Lua component R/W on 1k entities
+    {
+        let mut app = make_lua_rw_app(1_000);
+        profile_app("app_lua_component_rw_1k", &mut app, 20, 200);
+    }
+}
+
 // ── Entry point ───────────────────────────────────────────────────────────────
 
 /// All registered benchmarks in declaration order.
@@ -511,6 +542,12 @@ fn main() {
 
     println!("Evernight engine -- baseline benchmarks");
     println!("CPU: {}\n", cpu_name());
+
+    // `benchmark profile` → only run phase-breakdown profiles
+    if filter.as_deref() == Some("profile") {
+        run_profile_benchmarks();
+        return;
+    }
 
     if let Some(ref pat) = filter {
         // ── Filtered run ──────────────────────────────────────────────────────

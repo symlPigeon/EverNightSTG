@@ -27,6 +27,7 @@ checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 name = "benchmark"
 version = "0.1.0"
 dependencies = [
+ "evernight_benchmark",
  "evernight_core",
  "evernight_lua",
  "evernight_math",
@@ -114,6 +115,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "evernight_benchmark"
+version = "0.1.0"
+
+[[package]]
 name = "evernight_core"
 version = "0.1.0"
 dependencies = [
@@ -151,6 +156,7 @@ version = "0.1.0"
 name = "evernight_runtime"
 version = "0.1.0"
 dependencies = [
+ "evernight_benchmark",
  "evernight_core",
  "evernight_math",
  "rayon",
@@ -160,6 +166,7 @@ dependencies = [
 name = "evernight_script"
 version = "0.1.0"
 dependencies = [
+ "evernight_benchmark",
  "evernight_core",
  "evernight_math",
  "evernight_runtime",
