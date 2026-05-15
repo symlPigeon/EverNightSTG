@@ -162,6 +162,7 @@ impl App {
 
         // 3. Movement
         self.world.run_movement_system();
+        self.world.run_bounded_system();
         run_hooks(
             &mut self.post_movement,
             &mut self.world,
@@ -171,6 +172,7 @@ impl App {
 
         // 4. Collision
         self.world.run_collision_system();
+        self.world.run_elastic_collision_system();
         run_hooks(
             &mut self.post_collision,
             &mut self.world,

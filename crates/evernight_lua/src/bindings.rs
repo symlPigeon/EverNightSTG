@@ -8,7 +8,7 @@ use evernight_core::{CollisionMask, LayerBit, TagFlags, Tick};
 use evernight_math::{
     Angle, Capsule, Circle, Ellipse, Line, Polygon, Ray, Rectangle, Shape2D, Triangle, Vec2,
 };
-use evernight_runtime::{Hitbox, Hurtbox, Lifetime, Tag, Transform, Velocity};
+use evernight_runtime::{Hitbox, Hurtbox, Lifetime, Tag, Transform, Velocity, ElasticCollision, Bounded};
 use mlua::{Lua, Table};
 
 // ── Shape2D ──────────────────────────────────────────────────────────────────
@@ -271,8 +271,37 @@ pub fn table_to_hurtbox(t: &Table) -> mlua::Result<Hurtbox> {
     Ok(Hurtbox::new(shape, LayerBit::new(layer_idx)))
 }
 
-// ── Tag flag name → TagFlags ──────────────────────────────────────────────────
+// ── ElasticCollision ─────────────────────────────────────────────────────────
+// { restitution: number }
 
+pub fn elastic_collision_to_table(ec: &ElasticCollision, lua: &Lua) -> mlua::Result<Table> {
+    let t = lua.create_table()?;
+    t.set("restitution", ec.restitution)?;
+    Ok(t)
+}
+
+pub fn table_to_elastic_collision(t: &Table) -> mlua::Result<ElasticCollision> {
+    let restitution: f32 = t.get::<f32>("restitution").unwrap_or(1.0);
+    Ok(ElasticCollision::new(restitution))
+}
+
+// ── Bounded ───────────────────────────────────────────────────────────────────
+// { half_width: number, half_height: number }
+
+pub fn bounded_to_table(b: &Bounded, lua: &Lua) -> mlua::Result<Table> {
+    let t = lua.create_table()?;
+    t.set("half_width", b.half_width)?;
+    t.set("half_height", b.half_height)?;
+    Ok(t)
+}
+
+pub fn table_to_bounded(t: &Table) -> mlua::Result<Bounded> {
+    let hw: f32 = t.get::<f32>("half_width").unwrap_or(0.0);
+    let hh: f32 = t.get::<f32>("half_height").unwrap_or(0.0);
+    Ok(Bounded::new(hw, hh))
+}
+
+// ── Tag flag name → TagFlags ──────────────────────────────────────────────────
 pub fn flag_name_to_flags(name: &str) -> mlua::Result<TagFlags> {
     match name {
         "player" => Ok(TagFlags::PLAYER),

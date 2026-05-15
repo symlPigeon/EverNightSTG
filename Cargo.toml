@@ -11,3 +11,6 @@ members = [
 
     "tools/benchmark",
 ]
+
+[profile.release]
+debug = 1          # 保留行号信息，不影响优化级别

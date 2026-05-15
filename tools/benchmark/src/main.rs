@@ -484,46 +484,90 @@ fn bm_lua_require_cached() -> BenchResult {
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
+/// All registered benchmarks in declaration order.
+/// Name must match the string passed to `bench(...)` inside each function.
+const ALL: &[(&str, fn() -> BenchResult)] = &[
+    ("world_step_empty",                    bm_world_step_empty),
+    ("world_step_1k_entities",              bm_world_step_1k_entities),
+    ("world_step_10k_entities",             bm_world_step_10k_entities),
+    ("spawn_storm_1k",                      bm_spawn_storm_1k),
+    ("spawn_storm_10k",                     bm_spawn_storm_10k),
+    ("lua_on_frame_noop",                   bm_lua_on_frame_noop),
+    ("lua_component_rw_1k",                 bm_lua_component_rw_1k),
+    ("lua_component_rw_10k",                bm_lua_component_rw_10k),
+    ("collision_no_overlap_1k",             bm_collision_no_overlap_1k),
+    ("collision_no_overlap_5k",             bm_collision_no_overlap_5k),
+    ("collision_all_overlap_100",           bm_collision_all_overlap_100),
+    ("collision_all_overlap_500",           bm_collision_all_overlap_500),
+    ("collision_event_dispatch_lua_100ent", bm_collision_event_dispatch_lua_100),
+    ("lua_iter_entities_transform_1k",      bm_lua_iter_entities_transform_1k),
+    ("lua_iter_entities_transform_10k",     bm_lua_iter_entities_transform_10k),
+    ("lua_on_collision_callback_100ent",    bm_lua_on_collision_callback_100ent),
+    ("lua_require_cached",                  bm_lua_require_cached),
+];
+
 fn main() {
+    let filter = std::env::args().nth(1);
+
     println!("Evernight engine -- baseline benchmarks");
     println!("CPU: {}\n", cpu_name());
 
-    println!("=== World step ===");
-    print_results(&[
-        bm_world_step_empty(),
-        bm_world_step_1k_entities(),
-        bm_world_step_10k_entities(),
-    ]);
+    if let Some(ref pat) = filter {
+        // ── Filtered run ──────────────────────────────────────────────────────
+        let matched: Vec<BenchResult> = ALL
+            .iter()
+            .filter(|(name, _)| name.contains(pat.as_str()))
+            .map(|(_, f)| f())
+            .collect();
 
-    println!("=== Spawn ===");
-    print_results(&[
-        bm_spawn_storm_1k(),
-        bm_spawn_storm_10k(),
-    ]);
+        if matched.is_empty() {
+            eprintln!("no benchmark name contains {:?}", pat);
+            eprintln!("available:");
+            for (name, _) in ALL {
+                eprintln!("  {name}");
+            }
+            std::process::exit(1);
+        }
+        print_results(&matched);
+    } else {
+        // ── Full run (grouped) ────────────────────────────────────────────────
+        println!("=== World step ===");
+        print_results(&[
+            bm_world_step_empty(),
+            bm_world_step_1k_entities(),
+            bm_world_step_10k_entities(),
+        ]);
 
-    println!("=== Lua scripting ===");
-    print_results(&[
-        bm_lua_on_frame_noop(),
-        bm_lua_component_rw_1k(),
-        bm_lua_component_rw_10k(),
-    ]);
+        println!("=== Spawn ===");
+        print_results(&[
+            bm_spawn_storm_1k(),
+            bm_spawn_storm_10k(),
+        ]);
 
-    println!("=== Collision ===");
-    print_results(&[
-        bm_collision_no_overlap_1k(),
-        bm_collision_no_overlap_5k(),
-        bm_collision_all_overlap_100(),
-        bm_collision_all_overlap_500(),
-        bm_collision_event_dispatch_lua_100(),
-    ]);
+        println!("=== Lua scripting ===");
+        print_results(&[
+            bm_lua_on_frame_noop(),
+            bm_lua_component_rw_1k(),
+            bm_lua_component_rw_10k(),
+        ]);
 
-    println!("=== P2/P3 feature benchmarks ===");
-    print_results(&[
-        bm_lua_iter_entities_transform_1k(),
-        bm_lua_iter_entities_transform_10k(),
-        bm_lua_on_collision_callback_100ent(),
-        bm_lua_require_cached(),
-    ]);
+        println!("=== Collision ===");
+        print_results(&[
+            bm_collision_no_overlap_1k(),
+            bm_collision_no_overlap_5k(),
+            bm_collision_all_overlap_100(),
+            bm_collision_all_overlap_500(),
+            bm_collision_event_dispatch_lua_100(),
+        ]);
+
+        println!("=== P2/P3 feature benchmarks ===");
+        print_results(&[
+            bm_lua_iter_entities_transform_1k(),
+            bm_lua_iter_entities_transform_10k(),
+            bm_lua_on_collision_callback_100ent(),
+            bm_lua_require_cached(),
+        ]);
+    }
 }
 
 fn cpu_name() -> String {

@@ -1,3 +1,4 @@
+pub mod behaviors;
 pub mod collision;
 pub mod commands;
 pub mod component_storage;
@@ -9,8 +10,8 @@ pub mod systems;
 pub mod world;
 
 pub use {
-    collision::*, commands::*, component_storage::*, components::*, events::*, scheduler::*,
-    spatial_hash::*, systems::*, world::*,
+    behaviors::*, collision::*, commands::*, component_storage::*, components::*, events::*,
+    scheduler::*, spatial_hash::*, systems::*, world::*,
 };
 
 #[cfg(test)]

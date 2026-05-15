@@ -393,16 +393,26 @@ impl LuaEngine {
     }
 
     /// Registers the built-in engine components (Transform, Velocity, Tag, Lifetime,
-    /// Hitbox, Hurtbox) so they are immediately accessible from Lua without any
-    /// manual `register_component` calls.
+    /// Hitbox, Hurtbox, ElasticCollision, Bounded) so they are immediately accessible
+    /// from Lua without any manual `register_component` calls.
     fn register_builtins(&mut self) {
-        use evernight_runtime::{Hitbox, Hurtbox, Lifetime, Tag, Transform, Velocity};
+        use evernight_runtime::{Bounded, ElasticCollision, Hitbox, Hurtbox, Lifetime, Tag, Transform, Velocity};
         self.register_component::<Transform, _, _>("Transform", bindings::transform_to_table, bindings::table_to_transform);
         self.register_component::<Velocity, _, _>("Velocity",   bindings::velocity_to_table,  bindings::table_to_velocity);
         self.register_component::<Tag, _, _>(      "Tag",        bindings::tag_to_table,       bindings::table_to_tag);
         self.register_component::<Lifetime, _, _>( "Lifetime",   bindings::lifetime_to_table,  bindings::table_to_lifetime);
         self.register_component::<Hitbox, _, _>(   "Hitbox",     bindings::hitbox_to_table,    bindings::table_to_hitbox);
         self.register_component::<Hurtbox, _, _>(  "Hurtbox",    bindings::hurtbox_to_table,   bindings::table_to_hurtbox);
+        self.register_component::<ElasticCollision, _, _>(
+            "ElasticCollision",
+            bindings::elastic_collision_to_table,
+            bindings::table_to_elastic_collision,
+        );
+        self.register_component::<Bounded, _, _>(
+            "Bounded",
+            bindings::bounded_to_table,
+            bindings::table_to_bounded,
+        );
     }
 
     /// Registers a component type to be accessible from Lua via

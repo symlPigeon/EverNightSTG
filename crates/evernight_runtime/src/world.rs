@@ -1,6 +1,9 @@
 use evernight_core::{Component, EntityId, EventPayload, EverNightError, EverNightResult, IdAllocator, SpawnRequest, TagFlags, Tick};
 
-use crate::{Command, CommandBuffer, ComponentStorage, EventBus, Scheduler, Tag, collision_system, lifetime_system, movement_system};
+use crate::{
+    Command, CommandBuffer, ComponentStorage, EventBus, Scheduler, Tag,
+    bounded_system, collision_system, elastic_collision_system, lifetime_system, movement_system,
+};
 
 #[derive(Debug, Clone, Copy)]
 pub struct FixedStep {
@@ -213,9 +216,37 @@ impl World {
         movement_system(&mut self.component_storage, self.fixed_step.delta_time);
     }
 
+    /// Runs the bounded system: clamps entities inside their declared region and
+    /// reflects velocity on contact.  Must be called after `run_movement_system`.
+    pub fn run_bounded_system(&mut self) {
+        bounded_system(&mut self.component_storage);
+    }
+
     /// Runs the collision system (broad-phase + narrow-phase, emits Collision events).
     pub fn run_collision_system(&mut self) {
         collision_system(&mut self.component_storage, &mut self.event_bus, self.tick);
+    }
+
+    /// Runs the elastic collision response system.  Applies velocity impulses to
+    /// entity pairs that both carry `ElasticCollision`.  Must be called after
+    /// `run_collision_system` so that collision events are already present.
+    pub fn run_elastic_collision_system(&mut self) {
+        use evernight_core::EventPayload;
+        // Extract only what the system needs; avoids borrow conflicts between
+        // `&mut component_storage` and `&event_bus`.
+        let pairs: Vec<_> = self
+            .event_bus
+            .events()
+            .iter()
+            .filter_map(|e| {
+                if let EventPayload::Collision { attacker, defender, normal, .. } = e {
+                    Some((*attacker, *defender, *normal))
+                } else {
+                    None
+                }
+            })
+            .collect();
+        elastic_collision_system(&mut self.component_storage, &pairs);
     }
 
     /// Runs the lifetime system and immediately despawns expired entities.
@@ -254,12 +285,14 @@ impl World {
 
         // 3. Movement
         self.run_movement_system();
+        self.run_bounded_system();
         for hook in &mut scheduler.post_movement {
             hook(&mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, self.tick, self.fixed_step.delta_time);
         }
 
         // 4. Collision
         self.run_collision_system();
+        self.run_elastic_collision_system();
         for hook in &mut scheduler.post_collision {
             hook(&mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, self.tick, self.fixed_step.delta_time);
         }
