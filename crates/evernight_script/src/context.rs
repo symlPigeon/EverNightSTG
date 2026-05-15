@@ -1,4 +1,5 @@
 use evernight_core::{Component, EntityId, EventPayload, EverNightResult, SpawnRequest, Tick};
+use evernight_input::InputSnapshot;
 use evernight_runtime::World;
 
 use crate::{ComponentRegistry, TagRegistry};
@@ -13,6 +14,7 @@ pub struct ScriptContext<'a> {
     pub(crate) world: &'a mut World,
     pub(crate) component_registry: &'a ComponentRegistry,
     pub(crate) tag_registry: &'a TagRegistry,
+    pub(crate) input: &'a InputSnapshot,
 }
 
 impl<'a> ScriptContext<'a> {
@@ -20,11 +22,13 @@ impl<'a> ScriptContext<'a> {
         world: &'a mut World,
         component_registry: &'a ComponentRegistry,
         tag_registry: &'a TagRegistry,
+        input: &'a InputSnapshot,
     ) -> Self {
         ScriptContext {
             world,
             component_registry,
             tag_registry,
+            input,
         }
     }
 
@@ -134,5 +138,12 @@ impl<'a> ScriptContext<'a> {
 
     pub fn delta_time(&self) -> f32 {
         self.world.delta_time()
+    }
+
+    // ── Input ─────────────────────────────────────────────────────────────────
+
+    /// Returns the input snapshot for this frame.
+    pub fn input(&self) -> &InputSnapshot {
+        self.input
     }
 }

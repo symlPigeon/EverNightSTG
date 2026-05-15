@@ -1,4 +1,5 @@
 use evernight_core::{Component, EverNightResult};
+use evernight_input::InputSnapshot;
 use evernight_runtime::{FixedStep, Phase, PRIORITY_BUILTIN, StepResult, World};
 
 use crate::engine::ScriptEngine;
@@ -9,7 +10,7 @@ pub type AppHookFn = Box<dyn FnMut(&mut ScriptContext)>;
 
 /// Unified internal system type used for both built-in behaviors and user hooks.
 /// Not exposed publicly; callers use [`AppHookFn`] or `Box<dyn FnMut(&mut World)>`.
-type AppSystemFn = Box<dyn FnMut(&mut World, &ComponentRegistry, &TagRegistry)>;
+type AppSystemFn = Box<dyn FnMut(&mut World, &ComponentRegistry, &TagRegistry, &InputSnapshot)>;
 
 /// Top-level application handle for the Evernight engine.
 ///
@@ -31,6 +32,7 @@ pub struct App {
     tag_registry: TagRegistry,
     template_registry: TemplateRegistry,
     script_engine: Option<Box<dyn ScriptEngine>>,
+    input: InputSnapshot,
     pre_update:        Vec<(i32, AppSystemFn)>,
     post_spawn_commit:  Vec<(i32, AppSystemFn)>,
     pre_movement:      Vec<(i32, AppSystemFn)>,
@@ -50,6 +52,7 @@ impl App {
             tag_registry: TagRegistry::new(),
             template_registry: TemplateRegistry::new(),
             script_engine: None,
+            input: InputSnapshot::default(),
             pre_update:        Vec::new(),
             post_spawn_commit:  Vec::new(),
             pre_movement:      Vec::new(),
@@ -123,7 +126,7 @@ impl App {
     /// behaviors run before user systems.
     pub fn register_behavior(&mut self, phase: Phase, priority: i32, system: Box<dyn FnMut(&mut World)>) {
         let mut system = system;
-        let app_system: AppSystemFn = Box::new(move |world, _cr, _tr| system(world));
+        let app_system: AppSystemFn = Box::new(move |world, _cr, _tr, _input| system(world));
         sorted_insert(self.phase_entries_mut(phase), priority, app_system);
     }
 
@@ -133,8 +136,8 @@ impl App {
     /// user systems.  Equal-priority hooks run in registration order (FIFO).
     pub fn add_system(&mut self, phase: Phase, priority: i32, hook: AppHookFn) {
         let mut hook = hook;
-        let app_system: AppSystemFn = Box::new(move |world, cr, tr| {
-            let mut ctx = ScriptContext::new(world, cr, tr);
+        let app_system: AppSystemFn = Box::new(move |world, cr, tr, input| {
+            let mut ctx = ScriptContext::new(world, cr, tr, input);
             hook(&mut ctx);
         });
         sorted_insert(self.phase_entries_mut(phase), priority, app_system);
@@ -169,6 +172,13 @@ impl App {
         &self.tag_registry
     }
 
+    /// Replaces the current input snapshot with `snapshot`.
+    /// Call this once per frame **before** [`App::step`], typically from the
+    /// host platform's input polling code (e.g. the Godot bridge).
+    pub fn set_input(&mut self, snapshot: InputSnapshot) {
+        self.input = snapshot;
+    }
+
     // ── Frame step ────────────────────────────────────────────────────────────
 
     /// Advances the simulation by one fixed-step tick.
@@ -184,24 +194,24 @@ impl App {
     pub fn step(&mut self) -> EverNightResult<StepResult> {
         // 1. PreUpdate
         self.world.clear_events_for_frame();
-        run_app_phase(&mut self.pre_update, &mut self.world, &self.component_registry, &self.tag_registry);
+        run_app_phase(&mut self.pre_update, &mut self.world, &self.component_registry, &self.tag_registry, &self.input);
 
         // 2. SpawnCommit
         let factory = |name: &str, data: &[u8]| self.component_registry.create(name, data);
         let tmpl_factory = |id: u32| self.template_registry.instantiate(id);
         self.world
             .commit_commands(Some(&factory), Some(&tmpl_factory))?;
-        run_app_phase(&mut self.post_spawn_commit, &mut self.world, &self.component_registry, &self.tag_registry);
+        run_app_phase(&mut self.post_spawn_commit, &mut self.world, &self.component_registry, &self.tag_registry, &self.input);
 
         // 3. Movement
-        run_app_phase(&mut self.pre_movement, &mut self.world, &self.component_registry, &self.tag_registry);
+        run_app_phase(&mut self.pre_movement, &mut self.world, &self.component_registry, &self.tag_registry, &self.input);
         self.world.run_movement_system();
-        run_app_phase(&mut self.post_movement, &mut self.world, &self.component_registry, &self.tag_registry);
+        run_app_phase(&mut self.post_movement, &mut self.world, &self.component_registry, &self.tag_registry, &self.input);
 
         // 4. Collision
-        run_app_phase(&mut self.pre_collision, &mut self.world, &self.component_registry, &self.tag_registry);
+        run_app_phase(&mut self.pre_collision, &mut self.world, &self.component_registry, &self.tag_registry, &self.input);
         self.world.run_collision_system();
-        run_app_phase(&mut self.post_collision, &mut self.world, &self.component_registry, &self.tag_registry);
+        run_app_phase(&mut self.post_collision, &mut self.world, &self.component_registry, &self.tag_registry, &self.input);
 
         // 7. ScriptEngine::on_frame (after collision, before lifetime so scripts
         //    can still queue despawns that lifetime will clean up this tick)
@@ -210,17 +220,21 @@ impl App {
                 &mut self.world,
                 &self.component_registry,
                 &self.tag_registry,
+                &self.input,
             );
             engine.on_frame(&mut ctx)?;
         }
 
         // 5. PreLifetime
-        run_app_phase(&mut self.pre_lifetime, &mut self.world, &self.component_registry, &self.tag_registry);
+        run_app_phase(&mut self.pre_lifetime, &mut self.world, &self.component_registry, &self.tag_registry, &self.input);
         self.world.run_lifetime_system()?;
-        run_app_phase(&mut self.post_lifetime, &mut self.world, &self.component_registry, &self.tag_registry);
+        run_app_phase(&mut self.post_lifetime, &mut self.world, &self.component_registry, &self.tag_registry, &self.input);
 
         // 6. PostUpdate
-        run_app_phase(&mut self.post_update, &mut self.world, &self.component_registry, &self.tag_registry);
+        run_app_phase(&mut self.post_update, &mut self.world, &self.component_registry, &self.tag_registry, &self.input);
+
+        // Clear just_pressed / just_released so they don’t bleed into the next tick.
+        self.input.clear_transients();
 
         // 7. Advance tick
         Ok(self.world.advance_tick())
@@ -246,6 +260,7 @@ impl App {
                     &mut self.world,
                     &self.component_registry,
                     &self.tag_registry,
+                    &self.input,
                 );
                 p.$field = _t.elapsed();
             }};
@@ -262,7 +277,7 @@ impl App {
         // 1. PreUpdate
         time!(pre_update, {
             self.world.clear_events_for_frame();
-            run_app_phase(&mut self.pre_update, &mut self.world, &self.component_registry, &self.tag_registry);
+            run_app_phase(&mut self.pre_update, &mut self.world, &self.component_registry, &self.tag_registry, &self.input);
         });
 
         // 2. SpawnCommit
@@ -290,6 +305,7 @@ impl App {
                     &mut self.world,
                     &self.component_registry,
                     &self.tag_registry,
+                    &self.input,
                 );
                 engine.on_frame(&mut ctx)?;
             }
@@ -303,6 +319,7 @@ impl App {
         // 6. PostUpdate
         time_phase!(post_update, post_update);
 
+        self.input.clear_transients();
         Ok((self.world.advance_tick(), p))
     }
 }
@@ -313,9 +330,10 @@ fn run_app_phase(
     world: &mut World,
     component_registry: &ComponentRegistry,
     tag_registry: &TagRegistry,
+    input: &InputSnapshot,
 ) {
     for (_, system) in entries.iter_mut() {
-        system(world, component_registry, tag_registry);
+        system(world, component_registry, tag_registry, input);
     }
 }
 

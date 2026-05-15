@@ -130,6 +130,7 @@ name = "evernight_godot"
 version = "0.1.0"
 dependencies = [
  "evernight_core",
+ "evernight_input",
  "evernight_lua",
  "evernight_runtime",
  "evernight_script",
@@ -137,10 +138,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "evernight_input"
+version = "0.1.0"
+
+[[package]]
 name = "evernight_lua"
 version = "0.1.0"
 dependencies = [
  "evernight_core",
+ "evernight_input",
  "evernight_math",
  "evernight_runtime",
  "evernight_script",
@@ -168,6 +174,7 @@ version = "0.1.0"
 dependencies = [
  "evernight_benchmark",
  "evernight_core",
+ "evernight_input",
  "evernight_math",
  "evernight_runtime",
 ]

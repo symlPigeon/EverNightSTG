@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 evernight_core    = { path = "../evernight_core" }
 evernight_math    = { path = "../evernight_math" }
+evernight_input   = { path = "../evernight_input" }
 evernight_runtime = { path = "../evernight_runtime" }
 evernight_script  = { path = "../evernight_script" }
 

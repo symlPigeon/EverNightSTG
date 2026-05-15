@@ -8,7 +8,8 @@ crate-type = ["cdylib"]
 
 [dependencies]
 godot = "0.5"
-evernight_lua = { path = "../evernight_lua" }
-evernight_script = { path = "../evernight_script" }
+evernight_lua     = { path = "../evernight_lua" }
+evernight_script  = { path = "../evernight_script" }
 evernight_runtime = { path = "../evernight_runtime" }
-evernight_core = { path = "../evernight_core" }
+evernight_input   = { path = "../evernight_input" }
+evernight_core    = { path = "../evernight_core" }

@@ -4,7 +4,7 @@ compatibility_minimum = 4.1
 reloadable = true
 
 [libraries]
-windows.debug.x86_64   = "res://../target/release/evernight_godot.dll"
+windows.debug.x86_64   = "res://../target/debug/evernight_godot.dll"
 windows.release.x86_64 = "res://../target/release/evernight_godot.dll"
 linux.debug.x86_64     = "res://../target/debug/libevernight_godot.so"
 linux.release.x86_64   = "res://../target/release/libevernight_godot.so"

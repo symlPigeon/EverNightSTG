@@ -6,3 +6,4 @@
 script = ExtResource("1_main")
 
 [node name="EvernightBridge" type="EvernightBridge" parent="."]
+input_actions = ["ui_left", "ui_right", "ui_up", "ui_down", "ui_accept"]

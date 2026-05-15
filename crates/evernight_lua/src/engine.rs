@@ -232,6 +232,27 @@ impl UserData for CtxUserdata {
             Ok(())
         });
 
+        // ── Input API ────────────────────────────────────────────────────────
+        // Queries the InputSnapshot that was set via App::set_input() before step.
+
+        // ctx:is_key_pressed(action: String) → bool
+        // Returns true while the action button/key is held down this frame.
+        methods.add_method("is_key_pressed", |_, this, action: String| {
+            Ok(unsafe { this.as_ctx() }.input().is_pressed(&action))
+        });
+
+        // ctx:is_key_just_pressed(action: String) → bool
+        // Returns true only on the first frame the action was pressed.
+        methods.add_method("is_key_just_pressed", |_, this, action: String| {
+            Ok(unsafe { this.as_ctx() }.input().is_just_pressed(&action))
+        });
+
+        // ctx:is_key_just_released(action: String) → bool
+        // Returns true on the frame the action was released.
+        methods.add_method("is_key_just_released", |_, this, action: String| {
+            Ok(unsafe { this.as_ctx() }.input().is_just_released(&action))
+        });
+
         // ── Render API ────────────────────────────────────────────────────
         // These methods enqueue RenderCommands for the Godot bridge to apply
         // against RenderingServer after this frame's ECS step completes.

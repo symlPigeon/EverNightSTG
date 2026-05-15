@@ -1,10 +1,11 @@
 use std::collections::HashMap;
 use std::sync::mpsc::{self, Receiver};
 
-use godot::classes::{INode, Node, ProjectSettings, RenderingServer, Texture2D};
+use godot::classes::{INode, Input, Node, ProjectSettings, RenderingServer, Texture2D};
 use godot::obj::Singleton;
 use godot::prelude::*;
 
+use evernight_input::InputSnapshot;
 use evernight_lua::{
     LuaEngine,
     render_cmd::{RenderCommand, RenderSender},
@@ -60,6 +61,12 @@ pub struct EvernightBridge {
     /// from GDScript before the node enters the scene tree.
     #[export]
     lua_source: GString,
+
+    /// List of Godot input-action names to poll each frame.
+    /// Add your project's action names here (e.g. `"move_left"`, `"fire"`) so
+    /// they are available to Lua via `ctx:is_key_pressed(action)`.
+    #[export]
+    input_actions: Array<GString>,
 }
 
 #[godot_api]
@@ -73,6 +80,7 @@ impl INode for EvernightBridge {
             rid_map: HashMap::new(),
             texture_cache: HashMap::new(),
             lua_source: GString::new(),
+            input_actions: Array::new(),
         }
     }
 
@@ -129,6 +137,19 @@ impl INode for EvernightBridge {
     }
 
     fn process(&mut self, _delta: f64) {
+        // Collect input state before stepping the ECS so Lua scripts can query it.
+        if let Some(app) = &mut self.app {
+            let input = Input::singleton();
+            let mut snap = InputSnapshot::new();
+            for action in self.input_actions.iter_shared() {
+                let action_str = action.to_string();
+                snap.set_pressed(&action_str, input.is_action_pressed(&action_str));
+                snap.set_just_pressed(&action_str, input.is_action_just_pressed(&action_str));
+                snap.set_just_released(&action_str, input.is_action_just_released(&action_str));
+            }
+            app.set_input(snap);
+        }
+
         // Step ECS (Lua on_frame runs here, enqueuing RenderCommands)
         if let Some(app) = &mut self.app {
             if let Err(e) = app.step() {
@@ -190,6 +211,15 @@ impl EvernightBridge {
                 texture_path,
                 z_index,
             } => {
+                // If a canvas item already exists for this handle (can happen when
+                // the ID allocator reuses an entity ID before the old sprite was
+                // explicitly destroyed), free the stale item first to avoid leaking
+                // RenderingServer resources.
+                if let Some(old_item) = self.rid_map.remove(&handle) {
+                    rs.canvas_item_clear(old_item);
+                    rs.free_rid(old_item);
+                }
+
                 let item = rs.canvas_item_create();
                 if let Some(canvas) = self.canvas {
                     rs.canvas_item_set_parent(item, canvas);
