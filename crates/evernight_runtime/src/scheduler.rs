@@ -14,7 +14,8 @@ pub const PRIORITY_DEFAULT: i32 = 100;
 ///
 /// Receives mutable access to component storage, the event bus, the command buffer,
 /// the current tick, and the fixed delta time.
-pub type SystemFn = Box<dyn FnMut(&mut ComponentStorage, &mut EventBus, &mut CommandBuffer, Tick, f32)>;
+pub type SystemFn =
+    Box<dyn FnMut(&mut ComponentStorage, &mut EventBus, &mut CommandBuffer, Tick, f32)>;
 
 /// A system paired with its execution priority.
 ///
@@ -68,15 +69,15 @@ pub enum Phase {
 /// and [`PRIORITY_DEFAULT`] for general user systems.
 #[derive(Default)]
 pub struct Scheduler {
-    pub(crate) pre_update:        Vec<SystemEntry>,
-    pub(crate) post_spawn_commit:  Vec<SystemEntry>,
-    pub(crate) pre_movement:      Vec<SystemEntry>,
-    pub(crate) post_movement:     Vec<SystemEntry>,
-    pub(crate) pre_collision:     Vec<SystemEntry>,
-    pub(crate) post_collision:    Vec<SystemEntry>,
-    pub(crate) pre_lifetime:      Vec<SystemEntry>,
-    pub(crate) post_lifetime:     Vec<SystemEntry>,
-    pub(crate) post_update:       Vec<SystemEntry>,
+    pub(crate) pre_update: Vec<SystemEntry>,
+    pub(crate) post_spawn_commit: Vec<SystemEntry>,
+    pub(crate) pre_movement: Vec<SystemEntry>,
+    pub(crate) post_movement: Vec<SystemEntry>,
+    pub(crate) pre_collision: Vec<SystemEntry>,
+    pub(crate) post_collision: Vec<SystemEntry>,
+    pub(crate) pre_lifetime: Vec<SystemEntry>,
+    pub(crate) post_lifetime: Vec<SystemEntry>,
+    pub(crate) post_update: Vec<SystemEntry>,
 }
 
 impl Scheduler {
@@ -96,15 +97,15 @@ impl Scheduler {
 
     fn entries_mut(&mut self, phase: Phase) -> &mut Vec<SystemEntry> {
         match phase {
-            Phase::PreUpdate       => &mut self.pre_update,
+            Phase::PreUpdate => &mut self.pre_update,
             Phase::PostSpawnCommit => &mut self.post_spawn_commit,
-            Phase::PreMovement     => &mut self.pre_movement,
-            Phase::PostMovement    => &mut self.post_movement,
-            Phase::PreCollision    => &mut self.pre_collision,
-            Phase::PostCollision   => &mut self.post_collision,
-            Phase::PreLifetime     => &mut self.pre_lifetime,
-            Phase::PostLifetime    => &mut self.post_lifetime,
-            Phase::PostUpdate      => &mut self.post_update,
+            Phase::PreMovement => &mut self.pre_movement,
+            Phase::PostMovement => &mut self.post_movement,
+            Phase::PreCollision => &mut self.pre_collision,
+            Phase::PostCollision => &mut self.post_collision,
+            Phase::PreLifetime => &mut self.pre_lifetime,
+            Phase::PostLifetime => &mut self.post_lifetime,
+            Phase::PostUpdate => &mut self.post_update,
         }
     }
 }

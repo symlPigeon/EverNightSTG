@@ -8,7 +8,9 @@ use evernight_core::{CollisionMask, LayerBit, TagFlags, Tick};
 use evernight_math::{
     Angle, Capsule, Circle, Ellipse, Line, Polygon, Ray, Rectangle, Shape2D, Triangle, Vec2,
 };
-use evernight_runtime::{Hitbox, Hurtbox, Lifetime, Tag, Transform, Velocity, ElasticCollision, Bounded};
+use evernight_runtime::{
+    Bounded, ElasticCollision, Hitbox, Hurtbox, Lifetime, Tag, Transform, Velocity,
+};
 use mlua::{Lua, Table};
 
 // ── Shape2D ──────────────────────────────────────────────────────────────────

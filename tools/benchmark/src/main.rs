@@ -1,6 +1,6 @@
 use evernight_benchmark::{
-    AppFrameProfile, BenchResult, ProfileAccumulator, WorldFrameProfile,
-    bench, print_profile_report, print_results,
+    AppFrameProfile, BenchResult, ProfileAccumulator, WorldFrameProfile, bench,
+    print_profile_report, print_results,
 };
 use evernight_core::{CollisionMask, EntityId, LayerBit, SpawnRequest, impl_component};
 use evernight_lua::LuaEngine;
@@ -24,9 +24,17 @@ fn populate_moving(world: &mut World, n: u32) {
         let e = world.spawn_entity(SpawnRequest::new()).unwrap();
         let x = (i % 100) as f32 * 2.0;
         let y = (i / 100) as f32 * 2.0;
-        world.add_component(e, Transform::new(Vec2::new(x, y), Angle(0.0))).unwrap();
         world
-            .add_component(e, Velocity { linear: Vec2::new(0.1, 0.0), angular: Angle(0.0) })
+            .add_component(e, Transform::new(Vec2::new(x, y), Angle(0.0)))
+            .unwrap();
+        world
+            .add_component(
+                e,
+                Velocity {
+                    linear: Vec2::new(0.1, 0.0),
+                    angular: Angle(0.0),
+                },
+            )
             .unwrap();
     }
     world.step(&mut sched).unwrap();
@@ -36,13 +44,22 @@ fn populate_collision(world: &mut World, n: u32, cluster: bool) {
     let mut sched = no_hooks();
     for i in 0..n {
         let e = world.spawn_entity(SpawnRequest::new()).unwrap();
-        let pos = if cluster { Vec2::zero() } else { Vec2::new(i as f32 * 100.0, 0.0) };
-        world.add_component(e, Transform::new(pos, Angle(0.0))).unwrap();
+        let pos = if cluster {
+            Vec2::zero()
+        } else {
+            Vec2::new(i as f32 * 100.0, 0.0)
+        };
+        world
+            .add_component(e, Transform::new(pos, Angle(0.0)))
+            .unwrap();
         world
             .add_component(
                 e,
                 Hitbox::new(
-                    Shape2D::Circle(Circle { center: Vec2::zero(), radius: 1.0 }),
+                    Shape2D::Circle(Circle {
+                        center: Vec2::zero(),
+                        radius: 1.0,
+                    }),
                     LayerBit::new(0),
                     CollisionMask::new(0),
                     false,
@@ -53,7 +70,10 @@ fn populate_collision(world: &mut World, n: u32, cluster: bool) {
             .add_component(
                 e,
                 Hurtbox::new(
-                    Shape2D::Circle(Circle { center: Vec2::zero(), radius: 1.0 }),
+                    Shape2D::Circle(Circle {
+                        center: Vec2::zero(),
+                        radius: 1.0,
+                    }),
                     LayerBit::new(0),
                 ),
             )
@@ -143,7 +163,12 @@ fn make_lua_rw_app(n: u32) -> App {
             t.set("y", p.y)?;
             Ok(t)
         },
-        |t| Ok(Pos { x: t.get("x")?, y: t.get("y")? }),
+        |t| {
+            Ok(Pos {
+                x: t.get("x")?,
+                y: t.get("y")?,
+            })
+        },
     );
     engine
         .load(
@@ -178,7 +203,10 @@ fn make_lua_rw_app(n: u32) -> App {
 
     let ids_lua = format!(
         "_G.entities = {{ {} }}",
-        ids.iter().map(|i| i.to_string()).collect::<Vec<_>>().join(", ")
+        ids.iter()
+            .map(|i| i.to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
     );
     app.load_script(&ids_lua).unwrap();
     app
@@ -268,7 +296,10 @@ fn bm_collision_event_dispatch_lua_100() -> BenchResult {
             .add_component(
                 e,
                 Hitbox::new(
-                    Shape2D::Circle(Circle { center: Vec2::zero(), radius: 1.0 }),
+                    Shape2D::Circle(Circle {
+                        center: Vec2::zero(),
+                        radius: 1.0,
+                    }),
                     LayerBit::new(0),
                     CollisionMask::new(0),
                     false,
@@ -279,7 +310,10 @@ fn bm_collision_event_dispatch_lua_100() -> BenchResult {
             .add_component(
                 e,
                 Hurtbox::new(
-                    Shape2D::Circle(Circle { center: Vec2::zero(), radius: 1.0 }),
+                    Shape2D::Circle(Circle {
+                        center: Vec2::zero(),
+                        radius: 1.0,
+                    }),
                     LayerBit::new(0),
                 ),
             )
@@ -382,7 +416,10 @@ fn bm_lua_on_collision_callback_100ent() -> BenchResult {
             .add_component(
                 e,
                 Hitbox::new(
-                    Shape2D::Circle(Circle { center: Vec2::zero(), radius: 1.0 }),
+                    Shape2D::Circle(Circle {
+                        center: Vec2::zero(),
+                        radius: 1.0,
+                    }),
                     LayerBit::new(0),
                     CollisionMask::new(0),
                     false,
@@ -393,7 +430,10 @@ fn bm_lua_on_collision_callback_100ent() -> BenchResult {
             .add_component(
                 e,
                 Hurtbox::new(
-                    Shape2D::Circle(Circle { center: Vec2::zero(), radius: 1.0 }),
+                    Shape2D::Circle(Circle {
+                        center: Vec2::zero(),
+                        radius: 1.0,
+                    }),
                     LayerBit::new(0),
                 ),
             )
@@ -441,13 +481,7 @@ fn bm_lua_require_cached() -> BenchResult {
 
 // ── Phase-breakdown profile benchmarks ───────────────────────────────────────
 
-fn profile_world(
-    name: &str,
-    world: &mut World,
-    sched: &mut Scheduler,
-    warmup: u32,
-    frames: u32,
-) {
+fn profile_world(name: &str, world: &mut World, sched: &mut Scheduler, warmup: u32, frames: u32) {
     for _ in 0..warmup {
         world.step_profiled(sched).unwrap();
     }
@@ -494,7 +528,13 @@ fn run_profile_benchmarks() {
         let mut world = make_world();
         populate_collision(&mut world, 100, true);
         let mut sched = no_hooks();
-        profile_world("world_100_all_overlap_collision", &mut world, &mut sched, 20, 200);
+        profile_world(
+            "world_100_all_overlap_collision",
+            &mut world,
+            &mut sched,
+            20,
+            200,
+        );
     }
 
     // App: Lua noop
@@ -520,23 +560,35 @@ type BenchFn = fn() -> BenchResult;
 /// All registered benchmarks in declaration order.
 /// Name must match the string passed to `bench(...)` inside each function.
 const ALL: &[(&str, BenchFn)] = &[
-    ("world_step_empty",                    bm_world_step_empty),
-    ("world_step_1k_entities",              bm_world_step_1k_entities),
-    ("world_step_10k_entities",             bm_world_step_10k_entities),
-    ("spawn_storm_1k",                      bm_spawn_storm_1k),
-    ("spawn_storm_10k",                     bm_spawn_storm_10k),
-    ("lua_on_frame_noop",                   bm_lua_on_frame_noop),
-    ("lua_component_rw_1k",                 bm_lua_component_rw_1k),
-    ("lua_component_rw_10k",                bm_lua_component_rw_10k),
-    ("collision_no_overlap_1k",             bm_collision_no_overlap_1k),
-    ("collision_no_overlap_5k",             bm_collision_no_overlap_5k),
-    ("collision_all_overlap_100",           bm_collision_all_overlap_100),
-    ("collision_all_overlap_500",           bm_collision_all_overlap_500),
-    ("collision_event_dispatch_lua_100ent", bm_collision_event_dispatch_lua_100),
-    ("lua_iter_entities_transform_1k",      bm_lua_iter_entities_transform_1k),
-    ("lua_iter_entities_transform_10k",     bm_lua_iter_entities_transform_10k),
-    ("lua_on_collision_callback_100ent",    bm_lua_on_collision_callback_100ent),
-    ("lua_require_cached",                  bm_lua_require_cached),
+    ("world_step_empty", bm_world_step_empty),
+    ("world_step_1k_entities", bm_world_step_1k_entities),
+    ("world_step_10k_entities", bm_world_step_10k_entities),
+    ("spawn_storm_1k", bm_spawn_storm_1k),
+    ("spawn_storm_10k", bm_spawn_storm_10k),
+    ("lua_on_frame_noop", bm_lua_on_frame_noop),
+    ("lua_component_rw_1k", bm_lua_component_rw_1k),
+    ("lua_component_rw_10k", bm_lua_component_rw_10k),
+    ("collision_no_overlap_1k", bm_collision_no_overlap_1k),
+    ("collision_no_overlap_5k", bm_collision_no_overlap_5k),
+    ("collision_all_overlap_100", bm_collision_all_overlap_100),
+    ("collision_all_overlap_500", bm_collision_all_overlap_500),
+    (
+        "collision_event_dispatch_lua_100ent",
+        bm_collision_event_dispatch_lua_100,
+    ),
+    (
+        "lua_iter_entities_transform_1k",
+        bm_lua_iter_entities_transform_1k,
+    ),
+    (
+        "lua_iter_entities_transform_10k",
+        bm_lua_iter_entities_transform_10k,
+    ),
+    (
+        "lua_on_collision_callback_100ent",
+        bm_lua_on_collision_callback_100ent,
+    ),
+    ("lua_require_cached", bm_lua_require_cached),
 ];
 
 fn main() {
@@ -578,10 +630,7 @@ fn main() {
         ]);
 
         println!("=== Spawn ===");
-        print_results(&[
-            bm_spawn_storm_1k(),
-            bm_spawn_storm_10k(),
-        ]);
+        print_results(&[bm_spawn_storm_1k(), bm_spawn_storm_10k()]);
 
         println!("=== Lua scripting ===");
         print_results(&[

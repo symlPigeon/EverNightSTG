@@ -8,10 +8,8 @@ use crate::{ComponentStorage, EventBus, Lifetime, Transform, Velocity};
 /// Entities missing either component are silently skipped.
 pub fn movement_system(storage: &mut ComponentStorage, delta_time: f32) {
     // Collect velocity data first to avoid a simultaneous mutable + immutable borrow.
-    let updates: Vec<(EntityId, Velocity)> = storage
-        .iter::<Velocity>()
-        .map(|(id, v)| (id, *v))
-        .collect();
+    let updates: Vec<(EntityId, Velocity)> =
+        storage.iter::<Velocity>().map(|(id, v)| (id, *v)).collect();
 
     for (id, vel) in updates {
         if let Some(transform) = storage.get_mut::<Transform>(id) {
@@ -50,5 +48,3 @@ pub fn lifetime_system(
 
     expired
 }
-
-

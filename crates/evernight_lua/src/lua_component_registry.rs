@@ -60,7 +60,8 @@ impl LuaComponentRegistry {
                 .expect("component type mismatch in to_table");
             to_table(concrete, lua)
         });
-        let from: LuaFromTableFn = Box::new(move |t| from_table(t).map(|c| Box::new(c) as Box<dyn Component>));
+        let from: LuaFromTableFn =
+            Box::new(move |t| from_table(t).map(|c| Box::new(c) as Box<dyn Component>));
         self.entries.insert(
             name.to_string(),
             LuaComponentEntry {

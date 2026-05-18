@@ -19,7 +19,9 @@ mod tests {
     use evernight_core::{CollisionMask, EventPayload, LayerBit, SpawnRequest, Tick};
     use evernight_math::{Angle, Circle, Shape2D, Vec2};
 
-    use crate::{FixedStep, Hitbox, Hurtbox, Lifetime, Phase, Scheduler, Transform, Velocity, World};
+    use crate::{
+        FixedStep, Hitbox, Hurtbox, Lifetime, Phase, Scheduler, Transform, Velocity, World,
+    };
 
     fn make_world() -> World {
         World::new(FixedStep::new_60hz())
@@ -39,7 +41,9 @@ mod tests {
         world.step(&mut sched).unwrap();
         let events = world.get_events();
         assert!(
-            events.iter().any(|e| matches!(e, EventPayload::Spawned { entity: e_id, .. } if *e_id == entity)),
+            events.iter().any(
+                |e| matches!(e, EventPayload::Spawned { entity: e_id, .. } if *e_id == entity)
+            ),
             "expected Spawned event for {entity:?}"
         );
     }
@@ -69,7 +73,9 @@ mod tests {
         assert!(world.get_component::<Transform>(entity).is_none());
         let events = world.get_events();
         assert!(
-            events.iter().any(|e| matches!(e, EventPayload::Despawned { entity: e_id, .. } if *e_id == entity)),
+            events.iter().any(
+                |e| matches!(e, EventPayload::Despawned { entity: e_id, .. } if *e_id == entity)
+            ),
         );
     }
 
@@ -110,14 +116,17 @@ mod tests {
 
         let entity = world.spawn_entity(SpawnRequest::new()).unwrap();
         world.add_component(entity, Transform::identity()).unwrap();
-        world.add_component(entity, Velocity::new(Vec2::new(10.0, 0.0), Angle(0.0))).unwrap();
+        world
+            .add_component(entity, Velocity::new(Vec2::new(10.0, 0.0), Angle(0.0)))
+            .unwrap();
         world.step(&mut sched).unwrap();
 
         let pos = world.get_component::<Transform>(entity).unwrap().position;
         let expected = 10.0 * dt;
         assert!(
             (pos.x - expected).abs() < 1e-5,
-            "expected x={expected}, got x={}", pos.x
+            "expected x={expected}, got x={}",
+            pos.x
         );
         assert!(pos.y.abs() < 1e-5);
     }
@@ -143,14 +152,16 @@ mod tests {
         let mut sched = no_hooks();
 
         let entity = world.spawn_entity(SpawnRequest::new()).unwrap();
-        world.add_component(entity, Lifetime::new(Tick::new(1))).unwrap();
+        world
+            .add_component(entity, Lifetime::new(Tick::new(1)))
+            .unwrap();
         world.step(&mut sched).unwrap();
 
         assert!(!world.is_alive(entity));
         let events = world.get_events();
-        assert!(
-            events.iter().any(|e| matches!(e, EventPayload::LifetimeExpired { entity: e_id, .. } if *e_id == entity)),
-        );
+        assert!(events.iter().any(
+            |e| matches!(e, EventPayload::LifetimeExpired { entity: e_id, .. } if *e_id == entity)
+        ),);
     }
 
     #[test]
@@ -159,11 +170,20 @@ mod tests {
         let mut sched = no_hooks();
 
         let entity = world.spawn_entity(SpawnRequest::new()).unwrap();
-        world.add_component(entity, Lifetime::new(Tick::new(2))).unwrap();
+        world
+            .add_component(entity, Lifetime::new(Tick::new(2)))
+            .unwrap();
         world.step(&mut sched).unwrap();
 
-        assert!(world.is_alive(entity), "entity should still be alive after 1 step");
-        let remaining = world.get_component::<Lifetime>(entity).unwrap().remaining.as_u32();
+        assert!(
+            world.is_alive(entity),
+            "entity should still be alive after 1 step"
+        );
+        let remaining = world
+            .get_component::<Lifetime>(entity)
+            .unwrap()
+            .remaining
+            .as_u32();
         assert_eq!(remaining, 1);
 
         world.step(&mut sched).unwrap();
@@ -172,11 +192,18 @@ mod tests {
 
     // ── collision_system ──────────────────────────────────────────────────────
 
-    fn layer(n: u32) -> LayerBit { LayerBit::new(n) }
-    fn mask(n: u32) -> CollisionMask { CollisionMask::new(n) }
+    fn layer(n: u32) -> LayerBit {
+        LayerBit::new(n)
+    }
+    fn mask(n: u32) -> CollisionMask {
+        CollisionMask::new(n)
+    }
 
     fn circle_shape(cx: f32, cy: f32, r: f32) -> Shape2D {
-        Shape2D::Circle(Circle { center: Vec2::new(cx, cy), radius: r })
+        Shape2D::Circle(Circle {
+            center: Vec2::new(cx, cy),
+            radius: r,
+        })
     }
 
     #[test]
@@ -185,10 +212,20 @@ mod tests {
         let mut sched = no_hooks();
 
         let attacker = world.spawn_entity(SpawnRequest::new()).unwrap();
-        world.add_component(attacker, Hitbox::new(circle_shape(0.0, 0.0, 1.0), layer(0), mask(1), false)).unwrap();
+        world
+            .add_component(
+                attacker,
+                Hitbox::new(circle_shape(0.0, 0.0, 1.0), layer(0), mask(1), false),
+            )
+            .unwrap();
 
         let defender = world.spawn_entity(SpawnRequest::new()).unwrap();
-        world.add_component(defender, Hurtbox::new(circle_shape(0.5, 0.0, 1.0), layer(1))).unwrap();
+        world
+            .add_component(
+                defender,
+                Hurtbox::new(circle_shape(0.5, 0.0, 1.0), layer(1)),
+            )
+            .unwrap();
 
         world.step(&mut sched).unwrap();
 
@@ -208,14 +245,29 @@ mod tests {
         let mut sched = no_hooks();
 
         let attacker = world.spawn_entity(SpawnRequest::new()).unwrap();
-        world.add_component(attacker, Hitbox::new(circle_shape(0.0, 0.0, 1.0), layer(0), mask(1), false)).unwrap();
+        world
+            .add_component(
+                attacker,
+                Hitbox::new(circle_shape(0.0, 0.0, 1.0), layer(0), mask(1), false),
+            )
+            .unwrap();
 
         let defender = world.spawn_entity(SpawnRequest::new()).unwrap();
-        world.add_component(defender, Hurtbox::new(circle_shape(10.0, 0.0, 1.0), layer(1))).unwrap();
+        world
+            .add_component(
+                defender,
+                Hurtbox::new(circle_shape(10.0, 0.0, 1.0), layer(1)),
+            )
+            .unwrap();
 
         world.step(&mut sched).unwrap();
 
-        assert!(!world.get_events().iter().any(|e| matches!(e, EventPayload::Collision { .. })));
+        assert!(
+            !world
+                .get_events()
+                .iter()
+                .any(|e| matches!(e, EventPayload::Collision { .. }))
+        );
     }
 
     #[test]
@@ -225,14 +277,29 @@ mod tests {
 
         let attacker = world.spawn_entity(SpawnRequest::new()).unwrap();
         // hitbox targets layer 1, hurtbox is on layer 2 — no match
-        world.add_component(attacker, Hitbox::new(circle_shape(0.0, 0.0, 1.0), layer(0), mask(1), false)).unwrap();
+        world
+            .add_component(
+                attacker,
+                Hitbox::new(circle_shape(0.0, 0.0, 1.0), layer(0), mask(1), false),
+            )
+            .unwrap();
 
         let defender = world.spawn_entity(SpawnRequest::new()).unwrap();
-        world.add_component(defender, Hurtbox::new(circle_shape(0.5, 0.0, 1.0), layer(2))).unwrap();
+        world
+            .add_component(
+                defender,
+                Hurtbox::new(circle_shape(0.5, 0.0, 1.0), layer(2)),
+            )
+            .unwrap();
 
         world.step(&mut sched).unwrap();
 
-        assert!(!world.get_events().iter().any(|e| matches!(e, EventPayload::Collision { .. })));
+        assert!(
+            !world
+                .get_events()
+                .iter()
+                .any(|e| matches!(e, EventPayload::Collision { .. }))
+        );
     }
 
     #[test]
@@ -242,17 +309,26 @@ mod tests {
 
         let attacker = world.spawn_entity(SpawnRequest::new()).unwrap();
         // hit_once = true
-        world.add_component(attacker, Hitbox::new(circle_shape(0.0, 0.0, 5.0), layer(0), mask(1), true)).unwrap();
+        world
+            .add_component(
+                attacker,
+                Hitbox::new(circle_shape(0.0, 0.0, 5.0), layer(0), mask(1), true),
+            )
+            .unwrap();
 
         // Three defenders all overlapping the hitbox
         for offset in [0.0_f32, 0.5, 1.0] {
             let def = world.spawn_entity(SpawnRequest::new()).unwrap();
-            world.add_component(def, Hurtbox::new(circle_shape(offset, 0.0, 1.0), layer(1))).unwrap();
+            world
+                .add_component(def, Hurtbox::new(circle_shape(offset, 0.0, 1.0), layer(1)))
+                .unwrap();
         }
 
         world.step(&mut sched).unwrap();
 
-        let collision_count = world.get_events().iter()
+        let collision_count = world
+            .get_events()
+            .iter()
             .filter(|e| matches!(e, EventPayload::Collision { attacker: a, .. } if *a == attacker))
             .count();
         assert_eq!(collision_count, 1, "hit_once hitbox should only fire once");
@@ -286,18 +362,24 @@ mod tests {
 
         let entity = world.spawn_entity(SpawnRequest::new()).unwrap();
         world.add_component(entity, Transform::identity()).unwrap();
-        world.add_component(entity, Velocity::new(Vec2::new(1.0, 0.0), Angle(0.0))).unwrap();
+        world
+            .add_component(entity, Velocity::new(Vec2::new(1.0, 0.0), Angle(0.0)))
+            .unwrap();
         // First step to commit components.
         world.step(&mut sched).unwrap();
 
         let captured_x = Arc::new(Mutex::new(0.0_f32));
         let captured_x_clone = Arc::clone(&captured_x);
 
-        sched.add_system(Phase::PostMovement, crate::PRIORITY_DEFAULT, Box::new(move |storage, _events, _cmds, _tick, _dt| {
-            if let Some(t) = storage.get::<Transform>(entity) {
-                *captured_x_clone.lock().unwrap() = t.position.x;
-            }
-        }));
+        sched.add_system(
+            Phase::PostMovement,
+            crate::PRIORITY_DEFAULT,
+            Box::new(move |storage, _events, _cmds, _tick, _dt| {
+                if let Some(t) = storage.get::<Transform>(entity) {
+                    *captured_x_clone.lock().unwrap() = t.position.x;
+                }
+            }),
+        );
 
         world.step(&mut sched).unwrap();
 
@@ -318,25 +400,44 @@ mod tests {
 
             // Attacker
             let att = world.spawn_entity(SpawnRequest::new()).unwrap();
-            world.add_component(att, Hitbox::new(circle_shape(0.0, 0.0, 10.0), layer(0), mask(1), false)).unwrap();
+            world
+                .add_component(
+                    att,
+                    Hitbox::new(circle_shape(0.0, 0.0, 10.0), layer(0), mask(1), false),
+                )
+                .unwrap();
 
             // Three defenders
             for i in 0..3 {
                 let def = world.spawn_entity(SpawnRequest::new()).unwrap();
-                world.add_component(def, Hurtbox::new(circle_shape(i as f32, 0.0, 1.0), layer(1))).unwrap();
+                world
+                    .add_component(
+                        def,
+                        Hurtbox::new(circle_shape(i as f32, 0.0, 1.0), layer(1)),
+                    )
+                    .unwrap();
             }
 
             world.step(&mut sched).unwrap();
 
-            world.get_events().iter().filter_map(|e| match e {
-                EventPayload::Collision { attacker, defender, .. } => Some((attacker.as_u32(), defender.as_u32())),
-                _ => None,
-            }).collect()
+            world
+                .get_events()
+                .iter()
+                .filter_map(|e| match e {
+                    EventPayload::Collision {
+                        attacker, defender, ..
+                    } => Some((attacker.as_u32(), defender.as_u32())),
+                    _ => None,
+                })
+                .collect()
         }
 
         let run_a = run_once();
         let run_b = run_once();
         assert!(!run_a.is_empty());
-        assert_eq!(run_a, run_b, "collision event order must be deterministic across runs");
+        assert_eq!(
+            run_a, run_b,
+            "collision event order must be deterministic across runs"
+        );
     }
 }

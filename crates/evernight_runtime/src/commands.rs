@@ -3,7 +3,10 @@ use std::any::TypeId;
 use evernight_core::{Component, EntityId, SpawnRequest};
 
 pub enum Command {
-    Spawn { entity: EntityId, request: SpawnRequest },
+    Spawn {
+        entity: EntityId,
+        request: SpawnRequest,
+    },
     Despawn(EntityId),
     AddComponent {
         entity: EntityId,
@@ -40,4 +43,3 @@ impl CommandBuffer {
         self.commands.clear();
     }
 }
-

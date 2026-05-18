@@ -1,4 +1,7 @@
-use evernight_core::{Component, EntityId, EventPayload, EverNightError, EverNightResult, IdAllocator, SpawnRequest, TagFlags, Tick};
+use evernight_core::{
+    Component, EntityId, EventPayload, EverNightError, EverNightResult, IdAllocator, SpawnRequest,
+    TagFlags, Tick,
+};
 
 use crate::{
     Command, CommandBuffer, ComponentStorage, EventBus, Scheduler, SystemEntry, Tag,
@@ -88,11 +91,18 @@ impl World {
         Ok(())
     }
 
-    pub fn add_component<T: Component>(&mut self, entity: EntityId, component: T) -> EverNightResult<()> {
+    pub fn add_component<T: Component>(
+        &mut self,
+        entity: EntityId,
+        component: T,
+    ) -> EverNightResult<()> {
         if !self.id_allocator.is_valid(entity) {
             return Err(EverNightError::InvalidEntityId(entity));
         }
-        self.command_buffer.push(Command::AddComponent { entity, component: Box::new(component) });
+        self.command_buffer.push(Command::AddComponent {
+            entity,
+            component: Box::new(component),
+        });
         Ok(())
     }
 
@@ -108,7 +118,10 @@ impl World {
         if !self.id_allocator.is_valid(entity) {
             return Err(EverNightError::InvalidEntityId(entity));
         }
-        self.command_buffer.push(Command::RemoveComponent { entity, component_type_id: std::any::TypeId::of::<T>() });
+        self.command_buffer.push(Command::RemoveComponent {
+            entity,
+            component_type_id: std::any::TypeId::of::<T>(),
+        });
         Ok(())
     }
 
@@ -131,25 +144,41 @@ impl World {
     }
 
     /// Gets a component reference by dynamic `TypeId` (committed state only).
-    pub fn get_component_dyn(&self, entity: EntityId, type_id: std::any::TypeId) -> Option<&dyn Component> {
+    pub fn get_component_dyn(
+        &self,
+        entity: EntityId,
+        type_id: std::any::TypeId,
+    ) -> Option<&dyn Component> {
         self.component_storage.get_dyn(entity, type_id)
     }
 
     /// Queues an `AddComponent` command with a pre-boxed component.
-    pub fn add_component_boxed(&mut self, entity: EntityId, component: Box<dyn Component>) -> EverNightResult<()> {
+    pub fn add_component_boxed(
+        &mut self,
+        entity: EntityId,
+        component: Box<dyn Component>,
+    ) -> EverNightResult<()> {
         if !self.id_allocator.is_valid(entity) {
             return Err(EverNightError::InvalidEntityId(entity));
         }
-        self.command_buffer.push(Command::AddComponent { entity, component });
+        self.command_buffer
+            .push(Command::AddComponent { entity, component });
         Ok(())
     }
 
     /// Queues a `RemoveComponent` command by dynamic `TypeId`.
-    pub fn remove_component_dyn(&mut self, entity: EntityId, type_id: std::any::TypeId) -> EverNightResult<()> {
+    pub fn remove_component_dyn(
+        &mut self,
+        entity: EntityId,
+        type_id: std::any::TypeId,
+    ) -> EverNightResult<()> {
         if !self.id_allocator.is_valid(entity) {
             return Err(EverNightError::InvalidEntityId(entity));
         }
-        self.command_buffer.push(Command::RemoveComponent { entity, component_type_id: type_id });
+        self.command_buffer.push(Command::RemoveComponent {
+            entity,
+            component_type_id: type_id,
+        });
         Ok(())
     }
 
@@ -164,7 +193,9 @@ impl World {
     }
 
     /// Mutably iterates all entities that have component `T`, in ascending `EntityId` order.
-    pub fn iter_components_mut<T: Component>(&mut self) -> impl Iterator<Item = (EntityId, &mut T)> {
+    pub fn iter_components_mut<T: Component>(
+        &mut self,
+    ) -> impl Iterator<Item = (EntityId, &mut T)> {
         self.component_storage.iter_mut::<T>()
     }
 
@@ -202,12 +233,16 @@ impl World {
                     // Template components (applied after named, so they can be overridden)
                     if let Some(tf) = template_resolver
                         && let Some(tid) = request.template_id()
-                            && let Some(components) = tf(tid) {
-                                for component in components {
-                                    self.component_storage.insert_boxed(entity, component);
-                                }
-                            }
-                    self.event_bus.push(EventPayload::Spawned { entity, tick: self.tick });
+                        && let Some(components) = tf(tid)
+                    {
+                        for component in components {
+                            self.component_storage.insert_boxed(entity, component);
+                        }
+                    }
+                    self.event_bus.push(EventPayload::Spawned {
+                        entity,
+                        tick: self.tick,
+                    });
                 }
                 Command::Despawn(entity) => {
                     if !self.id_allocator.is_valid(entity) {
@@ -215,13 +250,20 @@ impl World {
                     }
                     self.component_storage.remove_all(entity);
                     self.id_allocator.deallocate(entity)?;
-                    self.event_bus.push(EventPayload::Despawned { entity, tick: self.tick });
+                    self.event_bus.push(EventPayload::Despawned {
+                        entity,
+                        tick: self.tick,
+                    });
                 }
                 Command::AddComponent { entity, component } => {
                     self.component_storage.insert_boxed(entity, component);
                 }
-                Command::RemoveComponent { entity, component_type_id } => {
-                    self.component_storage.remove_by_type_id(entity, component_type_id);
+                Command::RemoveComponent {
+                    entity,
+                    component_type_id,
+                } => {
+                    self.component_storage
+                        .remove_by_type_id(entity, component_type_id);
                 }
             }
         }
@@ -256,7 +298,13 @@ impl World {
             .events()
             .iter()
             .filter_map(|e| {
-                if let EventPayload::Collision { attacker, defender, normal, .. } = e {
+                if let EventPayload::Collision {
+                    attacker,
+                    defender,
+                    normal,
+                    ..
+                } = e
+                {
                     Some((*attacker, *defender, *normal))
                 } else {
                     None
@@ -293,29 +341,92 @@ impl World {
 
         // 1. PreUpdate
         self.clear_events_for_frame();
-        run_phase(&mut scheduler.pre_update, &mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, tick, dt);
+        run_phase(
+            &mut scheduler.pre_update,
+            &mut self.component_storage,
+            &mut self.event_bus,
+            &mut self.command_buffer,
+            tick,
+            dt,
+        );
 
         // 2. SpawnCommit
         self.commit_commands(None, None)?;
-        run_phase(&mut scheduler.post_spawn_commit, &mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, tick, dt);
+        run_phase(
+            &mut scheduler.post_spawn_commit,
+            &mut self.component_storage,
+            &mut self.event_bus,
+            &mut self.command_buffer,
+            tick,
+            dt,
+        );
 
         // 3. Movement
-        run_phase(&mut scheduler.pre_movement, &mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, tick, dt);
+        run_phase(
+            &mut scheduler.pre_movement,
+            &mut self.component_storage,
+            &mut self.event_bus,
+            &mut self.command_buffer,
+            tick,
+            dt,
+        );
         self.run_movement_system();
-        run_phase(&mut scheduler.post_movement, &mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, tick, dt);
+        run_phase(
+            &mut scheduler.post_movement,
+            &mut self.component_storage,
+            &mut self.event_bus,
+            &mut self.command_buffer,
+            tick,
+            dt,
+        );
 
         // 4. Collision
-        run_phase(&mut scheduler.pre_collision, &mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, tick, dt);
+        run_phase(
+            &mut scheduler.pre_collision,
+            &mut self.component_storage,
+            &mut self.event_bus,
+            &mut self.command_buffer,
+            tick,
+            dt,
+        );
         self.run_collision_system();
-        run_phase(&mut scheduler.post_collision, &mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, tick, dt);
+        run_phase(
+            &mut scheduler.post_collision,
+            &mut self.component_storage,
+            &mut self.event_bus,
+            &mut self.command_buffer,
+            tick,
+            dt,
+        );
 
         // 5. Lifetime
-        run_phase(&mut scheduler.pre_lifetime, &mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, tick, dt);
+        run_phase(
+            &mut scheduler.pre_lifetime,
+            &mut self.component_storage,
+            &mut self.event_bus,
+            &mut self.command_buffer,
+            tick,
+            dt,
+        );
         self.run_lifetime_system()?;
-        run_phase(&mut scheduler.post_lifetime, &mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, tick, dt);
+        run_phase(
+            &mut scheduler.post_lifetime,
+            &mut self.component_storage,
+            &mut self.event_bus,
+            &mut self.command_buffer,
+            tick,
+            dt,
+        );
 
         // 6. PostUpdate
-        run_phase(&mut scheduler.post_update, &mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, tick, dt);
+        run_phase(
+            &mut scheduler.post_update,
+            &mut self.component_storage,
+            &mut self.event_bus,
+            &mut self.command_buffer,
+            tick,
+            dt,
+        );
 
         // 7. Advance tick
         Ok(self.advance_tick())
@@ -329,11 +440,11 @@ impl World {
         &mut self,
         scheduler: &mut Scheduler,
     ) -> EverNightResult<(StepResult, evernight_benchmark::WorldFrameProfile)> {
-        use std::time::Instant;
         use evernight_benchmark::WorldFrameProfile;
+        use std::time::Instant;
 
         let mut p = WorldFrameProfile::default();
-        let dt   = self.fixed_step.delta_time;
+        let dt = self.fixed_step.delta_time;
         let tick = self.tick;
 
         macro_rules! time {
@@ -346,20 +457,107 @@ impl World {
 
         time!(pre_update, {
             self.clear_events_for_frame();
-            run_phase(&mut scheduler.pre_update, &mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, tick, dt);
+            run_phase(
+                &mut scheduler.pre_update,
+                &mut self.component_storage,
+                &mut self.event_bus,
+                &mut self.command_buffer,
+                tick,
+                dt,
+            );
         });
-        time!(spawn_commit,      self.commit_commands(None, None)?);
-        time!(post_spawn_commit, run_phase(&mut scheduler.post_spawn_commit, &mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, tick, dt));
-        time!(pre_movement,      run_phase(&mut scheduler.pre_movement,      &mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, tick, dt));
-        time!(movement,          self.run_movement_system());
-        time!(post_movement,     run_phase(&mut scheduler.post_movement,     &mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, tick, dt));
-        time!(pre_collision,     run_phase(&mut scheduler.pre_collision,     &mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, tick, dt));
-        time!(collision,         self.run_collision_system());
-        time!(post_collision,    run_phase(&mut scheduler.post_collision,    &mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, tick, dt));
-        time!(pre_lifetime,      run_phase(&mut scheduler.pre_lifetime,      &mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, tick, dt));
-        time!(lifetime,          self.run_lifetime_system()?);
-        time!(post_lifetime,     run_phase(&mut scheduler.post_lifetime,     &mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, tick, dt));
-        time!(post_update,       run_phase(&mut scheduler.post_update,       &mut self.component_storage, &mut self.event_bus, &mut self.command_buffer, tick, dt));
+        time!(spawn_commit, self.commit_commands(None, None)?);
+        time!(
+            post_spawn_commit,
+            run_phase(
+                &mut scheduler.post_spawn_commit,
+                &mut self.component_storage,
+                &mut self.event_bus,
+                &mut self.command_buffer,
+                tick,
+                dt
+            )
+        );
+        time!(
+            pre_movement,
+            run_phase(
+                &mut scheduler.pre_movement,
+                &mut self.component_storage,
+                &mut self.event_bus,
+                &mut self.command_buffer,
+                tick,
+                dt
+            )
+        );
+        time!(movement, self.run_movement_system());
+        time!(
+            post_movement,
+            run_phase(
+                &mut scheduler.post_movement,
+                &mut self.component_storage,
+                &mut self.event_bus,
+                &mut self.command_buffer,
+                tick,
+                dt
+            )
+        );
+        time!(
+            pre_collision,
+            run_phase(
+                &mut scheduler.pre_collision,
+                &mut self.component_storage,
+                &mut self.event_bus,
+                &mut self.command_buffer,
+                tick,
+                dt
+            )
+        );
+        time!(collision, self.run_collision_system());
+        time!(
+            post_collision,
+            run_phase(
+                &mut scheduler.post_collision,
+                &mut self.component_storage,
+                &mut self.event_bus,
+                &mut self.command_buffer,
+                tick,
+                dt
+            )
+        );
+        time!(
+            pre_lifetime,
+            run_phase(
+                &mut scheduler.pre_lifetime,
+                &mut self.component_storage,
+                &mut self.event_bus,
+                &mut self.command_buffer,
+                tick,
+                dt
+            )
+        );
+        time!(lifetime, self.run_lifetime_system()?);
+        time!(
+            post_lifetime,
+            run_phase(
+                &mut scheduler.post_lifetime,
+                &mut self.component_storage,
+                &mut self.event_bus,
+                &mut self.command_buffer,
+                tick,
+                dt
+            )
+        );
+        time!(
+            post_update,
+            run_phase(
+                &mut scheduler.post_update,
+                &mut self.component_storage,
+                &mut self.event_bus,
+                &mut self.command_buffer,
+                tick,
+                dt
+            )
+        );
 
         Ok((self.advance_tick(), p))
     }

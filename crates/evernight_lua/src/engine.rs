@@ -200,9 +200,11 @@ impl UserData for CtxUserdata {
         methods.add_method("iter_entities", |lua, this, name: String| {
             let type_id = match unsafe { this.as_reg() }.get_entry(&name) {
                 Some(entry) => entry.type_id,
-                None => return Err(mlua::Error::RuntimeError(
-                    format!("component '{name}' not registered in LuaComponentRegistry"),
-                )),
+                None => {
+                    return Err(mlua::Error::RuntimeError(format!(
+                        "component '{name}' not registered in LuaComponentRegistry"
+                    )));
+                }
             };
             let ids = unsafe { this.as_ctx() }.iter_entities_with_component(type_id);
             let t = lua.create_table_with_capacity(ids.len(), 0)?;
@@ -265,7 +267,11 @@ impl UserData for CtxUserdata {
             "create_sprite",
             |_, this, (handle, texture_path, z_index): (u64, String, i32)| {
                 if let Some(tx) = &this.render_tx {
-                    let _ = tx.send(RenderCommand::CreateSprite { handle, texture_path, z_index });
+                    let _ = tx.send(RenderCommand::CreateSprite {
+                        handle,
+                        texture_path,
+                        z_index,
+                    });
                 }
                 Ok(())
             },
@@ -337,15 +343,15 @@ impl UserData for CtxUserdata {
 pub struct LuaEngine {
     lua: Lua,
     /// Cached `on_frame(ctx)` global — called once per tick.
-    on_frame_fn:     Option<RegistryKey>,
+    on_frame_fn: Option<RegistryKey>,
     /// Cached `on_collision(ctx, attacker, defender, cx, cy, nx, ny)` global.
     on_collision_fn: Option<RegistryKey>,
     /// Cached `on_spawn(ctx, entity_id)` global.
-    on_spawn_fn:     Option<RegistryKey>,
+    on_spawn_fn: Option<RegistryKey>,
     /// Cached `on_despawn(ctx, entity_id)` global.
-    on_despawn_fn:   Option<RegistryKey>,
+    on_despawn_fn: Option<RegistryKey>,
     /// Cached `on_lifetime_expired(ctx, entity_id)` global.
-    on_lifetime_fn:  Option<RegistryKey>,
+    on_lifetime_fn: Option<RegistryKey>,
     /// Registry of component types exposed to Lua scripts.
     lua_comp_reg: LuaComponentRegistry,
     /// Optional render command channel injected by the Godot bridge.
@@ -363,11 +369,11 @@ impl LuaEngine {
         install_virtual_require(&lua).map_err(|e| EverNightError::ScriptError(e.to_string()))?;
         let mut engine = Self {
             lua,
-            on_frame_fn:     None,
+            on_frame_fn: None,
             on_collision_fn: None,
-            on_spawn_fn:     None,
-            on_despawn_fn:   None,
-            on_lifetime_fn:  None,
+            on_spawn_fn: None,
+            on_despawn_fn: None,
+            on_lifetime_fn: None,
             lua_comp_reg: LuaComponentRegistry::new(),
             render_tx: None,
         };
@@ -417,13 +423,35 @@ impl LuaEngine {
     /// Hitbox, Hurtbox, ElasticCollision, Bounded) so they are immediately accessible
     /// from Lua without any manual `register_component` calls.
     fn register_builtins(&mut self) {
-        use evernight_runtime::{Bounded, ElasticCollision, Hitbox, Hurtbox, Lifetime, Tag, Transform, Velocity};
-        self.register_component::<Transform, _, _>("Transform", bindings::transform_to_table, bindings::table_to_transform);
-        self.register_component::<Velocity, _, _>("Velocity",   bindings::velocity_to_table,  bindings::table_to_velocity);
-        self.register_component::<Tag, _, _>(      "Tag",        bindings::tag_to_table,       bindings::table_to_tag);
-        self.register_component::<Lifetime, _, _>( "Lifetime",   bindings::lifetime_to_table,  bindings::table_to_lifetime);
-        self.register_component::<Hitbox, _, _>(   "Hitbox",     bindings::hitbox_to_table,    bindings::table_to_hitbox);
-        self.register_component::<Hurtbox, _, _>(  "Hurtbox",    bindings::hurtbox_to_table,   bindings::table_to_hurtbox);
+        use evernight_runtime::{
+            Bounded, ElasticCollision, Hitbox, Hurtbox, Lifetime, Tag, Transform, Velocity,
+        };
+        self.register_component::<Transform, _, _>(
+            "Transform",
+            bindings::transform_to_table,
+            bindings::table_to_transform,
+        );
+        self.register_component::<Velocity, _, _>(
+            "Velocity",
+            bindings::velocity_to_table,
+            bindings::table_to_velocity,
+        );
+        self.register_component::<Tag, _, _>("Tag", bindings::tag_to_table, bindings::table_to_tag);
+        self.register_component::<Lifetime, _, _>(
+            "Lifetime",
+            bindings::lifetime_to_table,
+            bindings::table_to_lifetime,
+        );
+        self.register_component::<Hitbox, _, _>(
+            "Hitbox",
+            bindings::hitbox_to_table,
+            bindings::table_to_hitbox,
+        );
+        self.register_component::<Hurtbox, _, _>(
+            "Hurtbox",
+            bindings::hurtbox_to_table,
+            bindings::table_to_hurtbox,
+        );
         self.register_component::<ElasticCollision, _, _>(
             "ElasticCollision",
             bindings::elastic_collision_to_table,
@@ -465,19 +493,34 @@ impl LuaEngine {
         // `create_registry_value` borrows `self.lua`; the assignment borrows the
         // target field — disjoint, so NLL permits both in one statement.
         let f = globals.get::<mlua::Function>("on_frame").ok();
-        self.on_frame_fn = match f { Some(f) => Some(self.lua.create_registry_value(f)?), None => None };
+        self.on_frame_fn = match f {
+            Some(f) => Some(self.lua.create_registry_value(f)?),
+            None => None,
+        };
 
         let f = globals.get::<mlua::Function>("on_collision").ok();
-        self.on_collision_fn = match f { Some(f) => Some(self.lua.create_registry_value(f)?), None => None };
+        self.on_collision_fn = match f {
+            Some(f) => Some(self.lua.create_registry_value(f)?),
+            None => None,
+        };
 
         let f = globals.get::<mlua::Function>("on_spawn").ok();
-        self.on_spawn_fn = match f { Some(f) => Some(self.lua.create_registry_value(f)?), None => None };
+        self.on_spawn_fn = match f {
+            Some(f) => Some(self.lua.create_registry_value(f)?),
+            None => None,
+        };
 
         let f = globals.get::<mlua::Function>("on_despawn").ok();
-        self.on_despawn_fn = match f { Some(f) => Some(self.lua.create_registry_value(f)?), None => None };
+        self.on_despawn_fn = match f {
+            Some(f) => Some(self.lua.create_registry_value(f)?),
+            None => None,
+        };
 
         let f = globals.get::<mlua::Function>("on_lifetime_expired").ok();
-        self.on_lifetime_fn = match f { Some(f) => Some(self.lua.create_registry_value(f)?), None => None };
+        self.on_lifetime_fn = match f {
+            Some(f) => Some(self.lua.create_registry_value(f)?),
+            None => None,
+        };
 
         Ok(())
     }
@@ -505,31 +548,46 @@ impl ScriptEngine for LuaEngine {
 
         // Pre-collect event data while ctx is still freely borrowable.
         // Only collect kinds for which a handler is actually registered.
-        let mut col_events:  Vec<(u32, u32, f32, f32, f32, f32)> = Vec::new();
-        let mut spn_events:  Vec<u32> = Vec::new();
-        let mut dsp_events:  Vec<u32> = Vec::new();
+        let mut col_events: Vec<(u32, u32, f32, f32, f32, f32)> = Vec::new();
+        let mut spn_events: Vec<u32> = Vec::new();
+        let mut dsp_events: Vec<u32> = Vec::new();
         let mut life_events: Vec<u32> = Vec::new();
 
         if has_event_handlers {
             for event in ctx.events() {
                 match event {
-                    EventPayload::Collision { attacker, defender, contact_point, normal, .. } => {
+                    EventPayload::Collision {
+                        attacker,
+                        defender,
+                        contact_point,
+                        normal,
+                        ..
+                    } => {
                         if self.on_collision_fn.is_some() {
                             col_events.push((
-                                attacker.as_u32(), defender.as_u32(),
-                                contact_point.x, contact_point.y,
-                                normal.x, normal.y,
+                                attacker.as_u32(),
+                                defender.as_u32(),
+                                contact_point.x,
+                                contact_point.y,
+                                normal.x,
+                                normal.y,
                             ));
                         }
                     }
                     EventPayload::Spawned { entity, .. } => {
-                        if self.on_spawn_fn.is_some() { spn_events.push(entity.as_u32()); }
+                        if self.on_spawn_fn.is_some() {
+                            spn_events.push(entity.as_u32());
+                        }
                     }
                     EventPayload::Despawned { entity, .. } => {
-                        if self.on_despawn_fn.is_some() { dsp_events.push(entity.as_u32()); }
+                        if self.on_despawn_fn.is_some() {
+                            dsp_events.push(entity.as_u32());
+                        }
                     }
                     EventPayload::LifetimeExpired { entity, .. } => {
-                        if self.on_lifetime_fn.is_some() { life_events.push(entity.as_u32()); }
+                        if self.on_lifetime_fn.is_some() {
+                            life_events.push(entity.as_u32());
+                        }
                     }
                     EventPayload::Custom { .. } => {}
                 }
@@ -552,18 +610,18 @@ impl ScriptEngine for LuaEngine {
                     .map_err(|e| EverNightError::ScriptError(e.to_string()))?
             };
         }
-        let on_frame_f:    Option<mlua::Function> = fetch!(on_frame_fn);
+        let on_frame_f: Option<mlua::Function> = fetch!(on_frame_fn);
         let on_collision_f: Option<mlua::Function> = fetch!(on_collision_fn);
-        let on_spawn_f:    Option<mlua::Function> = fetch!(on_spawn_fn);
-        let on_despawn_f:  Option<mlua::Function> = fetch!(on_despawn_fn);
+        let on_spawn_f: Option<mlua::Function> = fetch!(on_spawn_fn);
+        let on_despawn_f: Option<mlua::Function> = fetch!(on_despawn_fn);
         let on_lifetime_f: Option<mlua::Function> = fetch!(on_lifetime_fn);
 
         lua.scope(|scope| {
             let ud = scope.create_userdata(CtxUserdata {
-            ctx_ptr,
-            reg_ptr,
-            render_tx: self.render_tx.clone(),
-        })?;
+                ctx_ptr,
+                reg_ptr,
+                render_tx: self.render_tx.clone(),
+            })?;
 
             // Per-tick handler
             if let Some(f) = &on_frame_f {
@@ -577,13 +635,19 @@ impl ScriptEngine for LuaEngine {
                 }
             }
             if let Some(f) = &on_spawn_f {
-                for &eid in &spn_events { f.call::<()>((ud.clone(), eid))?; }
+                for &eid in &spn_events {
+                    f.call::<()>((ud.clone(), eid))?;
+                }
             }
             if let Some(f) = &on_despawn_f {
-                for &eid in &dsp_events { f.call::<()>((ud.clone(), eid))?; }
+                for &eid in &dsp_events {
+                    f.call::<()>((ud.clone(), eid))?;
+                }
             }
             if let Some(f) = &on_lifetime_f {
-                for &eid in &life_events { f.call::<()>((ud.clone(), eid))?; }
+                for &eid in &life_events {
+                    f.call::<()>((ud.clone(), eid))?;
+                }
             }
 
             Ok(())
@@ -626,11 +690,11 @@ fn install_virtual_require(lua: &Lua) -> mlua::Result<()> {
     // _MODULES: name → source string  (populated by add_module)
     // _LOADED:  name → cached value   (populated by require on first load)
     globals.set("_MODULES", lua.create_table()?)?;
-    globals.set("_LOADED",  lua.create_table()?)?;
+    globals.set("_LOADED", lua.create_table()?)?;
 
     let require_fn = lua.create_function(|lua, name: String| {
         let globals = lua.globals();
-        let loaded:  mlua::Table = globals.get("_LOADED")?;
+        let loaded: mlua::Table = globals.get("_LOADED")?;
         let modules: mlua::Table = globals.get("_MODULES")?;
 
         // Fast-path: already cached
@@ -641,9 +705,8 @@ fn install_virtual_require(lua: &Lua) -> mlua::Result<()> {
 
         // Look up source
         let source: Option<String> = modules.get(name.as_str())?;
-        let source = source.ok_or_else(|| {
-            mlua::Error::RuntimeError(format!("module '{name}' not found"))
-        })?;
+        let source = source
+            .ok_or_else(|| mlua::Error::RuntimeError(format!("module '{name}' not found")))?;
 
         // Compile and execute the module chunk
         let chunk = lua.load(source.as_str()).into_function()?;
@@ -1074,7 +1137,10 @@ mod tests {
 
         let mut app = make_app(engine);
         let result = app.step();
-        assert!(result.is_err(), "iter_entities with unknown component should error");
+        assert!(
+            result.is_err(),
+            "iter_entities with unknown component should error"
+        );
     }
 
     // ── find_entities_with_tag tests ──────────────────────────────────────────
@@ -1201,7 +1267,10 @@ mod tests {
 
         let mut app = make_app(engine);
         let result = app.step();
-        assert!(result.is_err(), "require of unregistered module should error");
+        assert!(
+            result.is_err(),
+            "require of unregistered module should error"
+        );
     }
 
     #[test]
@@ -1309,13 +1378,34 @@ mod tests {
         let df = app.world_mut().spawn_entity(SpawnRequest::new()).unwrap();
 
         let tf = Transform::identity();
-        let circle = Shape2D::Circle(Circle { center: Vec2::zero(), radius: 10.0 });
+        let circle = Shape2D::Circle(Circle {
+            center: Vec2::zero(),
+            radius: 10.0,
+        });
         let layer = LayerBit::new(0);
 
         app.world_mut().add_component(at, tf).unwrap();
-        app.world_mut().add_component(at, Hitbox { shape: circle.clone(), layer, group: evernight_core::CollisionMask::from_raw(0xFFFF_FFFF), hit_once: false }).unwrap();
+        app.world_mut()
+            .add_component(
+                at,
+                Hitbox {
+                    shape: circle.clone(),
+                    layer,
+                    group: evernight_core::CollisionMask::from_raw(0xFFFF_FFFF),
+                    hit_once: false,
+                },
+            )
+            .unwrap();
         app.world_mut().add_component(df, tf).unwrap();
-        app.world_mut().add_component(df, Hurtbox { shape: circle, layer }).unwrap();
+        app.world_mut()
+            .add_component(
+                df,
+                Hurtbox {
+                    shape: circle,
+                    layer,
+                },
+            )
+            .unwrap();
 
         app.step().unwrap(); // collision detected → on_collision fired
     }

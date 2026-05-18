@@ -66,8 +66,7 @@ pub fn elastic_collision_system(
             continue;
         };
 
-        let rel = (va.linear.x - vb.linear.x) * normal.x
-            + (va.linear.y - vb.linear.y) * normal.y;
+        let rel = (va.linear.x - vb.linear.x) * normal.x + (va.linear.y - vb.linear.y) * normal.y;
         if rel <= 0.0 {
             continue; // already separating
         }

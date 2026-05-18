@@ -5,7 +5,6 @@ pub struct EventBus {
     queue: Vec<EventPayload>,
 }
 
-
 impl EventBus {
     pub fn new() -> Self {
         Self::default()

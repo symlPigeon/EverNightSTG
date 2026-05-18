@@ -1,6 +1,6 @@
 use evernight_core::{Component, EverNightResult};
 use evernight_input::InputSnapshot;
-use evernight_runtime::{FixedStep, Phase, PRIORITY_BUILTIN, StepResult, World};
+use evernight_runtime::{FixedStep, PRIORITY_BUILTIN, Phase, StepResult, World};
 
 use crate::engine::ScriptEngine;
 use crate::{ComponentRegistry, ScriptContext, TagRegistry, TemplateComponentFn, TemplateRegistry};
@@ -33,15 +33,15 @@ pub struct App {
     template_registry: TemplateRegistry,
     script_engine: Option<Box<dyn ScriptEngine>>,
     input: InputSnapshot,
-    pre_update:        Vec<(i32, AppSystemFn)>,
-    post_spawn_commit:  Vec<(i32, AppSystemFn)>,
-    pre_movement:      Vec<(i32, AppSystemFn)>,
-    post_movement:     Vec<(i32, AppSystemFn)>,
-    pre_collision:     Vec<(i32, AppSystemFn)>,
-    post_collision:    Vec<(i32, AppSystemFn)>,
-    pre_lifetime:      Vec<(i32, AppSystemFn)>,
-    post_lifetime:     Vec<(i32, AppSystemFn)>,
-    post_update:       Vec<(i32, AppSystemFn)>,
+    pre_update: Vec<(i32, AppSystemFn)>,
+    post_spawn_commit: Vec<(i32, AppSystemFn)>,
+    pre_movement: Vec<(i32, AppSystemFn)>,
+    post_movement: Vec<(i32, AppSystemFn)>,
+    pre_collision: Vec<(i32, AppSystemFn)>,
+    post_collision: Vec<(i32, AppSystemFn)>,
+    pre_lifetime: Vec<(i32, AppSystemFn)>,
+    post_lifetime: Vec<(i32, AppSystemFn)>,
+    post_update: Vec<(i32, AppSystemFn)>,
 }
 
 impl App {
@@ -53,23 +53,29 @@ impl App {
             template_registry: TemplateRegistry::new(),
             script_engine: None,
             input: InputSnapshot::default(),
-            pre_update:        Vec::new(),
-            post_spawn_commit:  Vec::new(),
-            pre_movement:      Vec::new(),
-            post_movement:     Vec::new(),
-            pre_collision:     Vec::new(),
-            post_collision:    Vec::new(),
-            pre_lifetime:      Vec::new(),
-            post_lifetime:     Vec::new(),
-            post_update:       Vec::new(),
+            pre_update: Vec::new(),
+            post_spawn_commit: Vec::new(),
+            pre_movement: Vec::new(),
+            post_movement: Vec::new(),
+            pre_collision: Vec::new(),
+            post_collision: Vec::new(),
+            pre_lifetime: Vec::new(),
+            post_lifetime: Vec::new(),
+            post_update: Vec::new(),
         };
         // Register standard built-in behaviors at PRIORITY_BUILTIN so they always
         // run before user systems in the same phase.  Both are no-ops when no
         // entities carry the relevant components.
-        app.register_behavior(Phase::PostMovement, PRIORITY_BUILTIN,
-            Box::new(|world| world.run_bounded_system()));
-        app.register_behavior(Phase::PostCollision, PRIORITY_BUILTIN,
-            Box::new(|world| world.run_elastic_collision_system()));
+        app.register_behavior(
+            Phase::PostMovement,
+            PRIORITY_BUILTIN,
+            Box::new(|world| world.run_bounded_system()),
+        );
+        app.register_behavior(
+            Phase::PostCollision,
+            PRIORITY_BUILTIN,
+            Box::new(|world| world.run_elastic_collision_system()),
+        );
         app
     }
 
@@ -124,7 +130,12 @@ impl App {
     /// The system receives raw `&mut World` access and is stored alongside user hooks
     /// in a single priority-sorted list.  Use [`PRIORITY_BUILTIN`] so built-in
     /// behaviors run before user systems.
-    pub fn register_behavior(&mut self, phase: Phase, priority: i32, system: Box<dyn FnMut(&mut World)>) {
+    pub fn register_behavior(
+        &mut self,
+        phase: Phase,
+        priority: i32,
+        system: Box<dyn FnMut(&mut World)>,
+    ) {
         let mut system = system;
         let app_system: AppSystemFn = Box::new(move |world, _cr, _tr, _input| system(world));
         sorted_insert(self.phase_entries_mut(phase), priority, app_system);
@@ -145,15 +156,15 @@ impl App {
 
     fn phase_entries_mut(&mut self, phase: Phase) -> &mut Vec<(i32, AppSystemFn)> {
         match phase {
-            Phase::PreUpdate       => &mut self.pre_update,
+            Phase::PreUpdate => &mut self.pre_update,
             Phase::PostSpawnCommit => &mut self.post_spawn_commit,
-            Phase::PreMovement     => &mut self.pre_movement,
-            Phase::PostMovement    => &mut self.post_movement,
-            Phase::PreCollision    => &mut self.pre_collision,
-            Phase::PostCollision   => &mut self.post_collision,
-            Phase::PreLifetime     => &mut self.pre_lifetime,
-            Phase::PostLifetime    => &mut self.post_lifetime,
-            Phase::PostUpdate      => &mut self.post_update,
+            Phase::PreMovement => &mut self.pre_movement,
+            Phase::PostMovement => &mut self.post_movement,
+            Phase::PreCollision => &mut self.pre_collision,
+            Phase::PostCollision => &mut self.post_collision,
+            Phase::PreLifetime => &mut self.pre_lifetime,
+            Phase::PostLifetime => &mut self.post_lifetime,
+            Phase::PostUpdate => &mut self.post_update,
         }
     }
 
@@ -194,24 +205,60 @@ impl App {
     pub fn step(&mut self) -> EverNightResult<StepResult> {
         // 1. PreUpdate
         self.world.clear_events_for_frame();
-        run_app_phase(&mut self.pre_update, &mut self.world, &self.component_registry, &self.tag_registry, &self.input);
+        run_app_phase(
+            &mut self.pre_update,
+            &mut self.world,
+            &self.component_registry,
+            &self.tag_registry,
+            &self.input,
+        );
 
         // 2. SpawnCommit
         let factory = |name: &str, data: &[u8]| self.component_registry.create(name, data);
         let tmpl_factory = |id: u32| self.template_registry.instantiate(id);
         self.world
             .commit_commands(Some(&factory), Some(&tmpl_factory))?;
-        run_app_phase(&mut self.post_spawn_commit, &mut self.world, &self.component_registry, &self.tag_registry, &self.input);
+        run_app_phase(
+            &mut self.post_spawn_commit,
+            &mut self.world,
+            &self.component_registry,
+            &self.tag_registry,
+            &self.input,
+        );
 
         // 3. Movement
-        run_app_phase(&mut self.pre_movement, &mut self.world, &self.component_registry, &self.tag_registry, &self.input);
+        run_app_phase(
+            &mut self.pre_movement,
+            &mut self.world,
+            &self.component_registry,
+            &self.tag_registry,
+            &self.input,
+        );
         self.world.run_movement_system();
-        run_app_phase(&mut self.post_movement, &mut self.world, &self.component_registry, &self.tag_registry, &self.input);
+        run_app_phase(
+            &mut self.post_movement,
+            &mut self.world,
+            &self.component_registry,
+            &self.tag_registry,
+            &self.input,
+        );
 
         // 4. Collision
-        run_app_phase(&mut self.pre_collision, &mut self.world, &self.component_registry, &self.tag_registry, &self.input);
+        run_app_phase(
+            &mut self.pre_collision,
+            &mut self.world,
+            &self.component_registry,
+            &self.tag_registry,
+            &self.input,
+        );
         self.world.run_collision_system();
-        run_app_phase(&mut self.post_collision, &mut self.world, &self.component_registry, &self.tag_registry, &self.input);
+        run_app_phase(
+            &mut self.post_collision,
+            &mut self.world,
+            &self.component_registry,
+            &self.tag_registry,
+            &self.input,
+        );
 
         // 7. ScriptEngine::on_frame (after collision, before lifetime so scripts
         //    can still queue despawns that lifetime will clean up this tick)
@@ -226,12 +273,30 @@ impl App {
         }
 
         // 5. PreLifetime
-        run_app_phase(&mut self.pre_lifetime, &mut self.world, &self.component_registry, &self.tag_registry, &self.input);
+        run_app_phase(
+            &mut self.pre_lifetime,
+            &mut self.world,
+            &self.component_registry,
+            &self.tag_registry,
+            &self.input,
+        );
         self.world.run_lifetime_system()?;
-        run_app_phase(&mut self.post_lifetime, &mut self.world, &self.component_registry, &self.tag_registry, &self.input);
+        run_app_phase(
+            &mut self.post_lifetime,
+            &mut self.world,
+            &self.component_registry,
+            &self.tag_registry,
+            &self.input,
+        );
 
         // 6. PostUpdate
-        run_app_phase(&mut self.post_update, &mut self.world, &self.component_registry, &self.tag_registry, &self.input);
+        run_app_phase(
+            &mut self.post_update,
+            &mut self.world,
+            &self.component_registry,
+            &self.tag_registry,
+            &self.input,
+        );
 
         // Clear just_pressed / just_released so they don’t bleed into the next tick.
         self.input.clear_transients();
@@ -247,8 +312,8 @@ impl App {
     pub fn step_profiled(
         &mut self,
     ) -> EverNightResult<(StepResult, evernight_benchmark::AppFrameProfile)> {
-        use std::time::Instant;
         use evernight_benchmark::AppFrameProfile;
+        use std::time::Instant;
 
         let mut p = AppFrameProfile::default();
 
@@ -277,25 +342,32 @@ impl App {
         // 1. PreUpdate
         time!(pre_update, {
             self.world.clear_events_for_frame();
-            run_app_phase(&mut self.pre_update, &mut self.world, &self.component_registry, &self.tag_registry, &self.input);
+            run_app_phase(
+                &mut self.pre_update,
+                &mut self.world,
+                &self.component_registry,
+                &self.tag_registry,
+                &self.input,
+            );
         });
 
         // 2. SpawnCommit
         time!(spawn_commit, {
             let factory = |name: &str, data: &[u8]| self.component_registry.create(name, data);
             let tmpl_factory = |id: u32| self.template_registry.instantiate(id);
-            self.world.commit_commands(Some(&factory), Some(&tmpl_factory))?;
+            self.world
+                .commit_commands(Some(&factory), Some(&tmpl_factory))?;
         });
         time_phase!(post_spawn_commit, post_spawn_commit);
 
         // 3. Movement
         time_phase!(pre_movement, pre_movement);
-        time!(movement,      self.world.run_movement_system());
+        time!(movement, self.world.run_movement_system());
         time_phase!(post_movement, post_movement);
 
         // 4. Collision
         time_phase!(pre_collision, pre_collision);
-        time!(collision,     self.world.run_collision_system());
+        time!(collision, self.world.run_collision_system());
         time_phase!(post_collision, post_collision);
 
         // ScriptEngine::on_frame
@@ -313,7 +385,7 @@ impl App {
 
         // 5. Lifetime
         time_phase!(pre_lifetime, pre_lifetime);
-        time!(lifetime,      self.world.run_lifetime_system()?);
+        time!(lifetime, self.world.run_lifetime_system()?);
         time_phase!(post_lifetime, post_lifetime);
 
         // 6. PostUpdate
@@ -352,7 +424,9 @@ mod tests {
     };
     use evernight_math::{Angle, Vec2};
     use evernight_math::{Circle, Shape2D};
-    use evernight_runtime::{FixedStep, Hitbox, Hurtbox, Lifetime, Phase, PRIORITY_DEFAULT, Transform, Velocity};
+    use evernight_runtime::{
+        FixedStep, Hitbox, Hurtbox, Lifetime, PRIORITY_DEFAULT, Phase, Transform, Velocity,
+    };
 
     use super::App;
 

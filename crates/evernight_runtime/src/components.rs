@@ -1,7 +1,9 @@
 use std::collections::BTreeSet;
 
 use evernight_core::{CollisionMask, LayerBit, TagFlags, Tick, impl_component};
-use evernight_math::{Angle, Capsule, Circle, Ellipse, Line, Polygon, Ray, Rectangle, Shape2D, Triangle, Vec2};
+use evernight_math::{
+    Angle, Capsule, Circle, Ellipse, Line, Polygon, Ray, Rectangle, Shape2D, Triangle, Vec2,
+};
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Transform {

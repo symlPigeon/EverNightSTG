@@ -75,7 +75,12 @@ pub struct Aabb {
 impl Aabb {
     #[inline]
     pub fn new(min_x: f32, min_y: f32, max_x: f32, max_y: f32) -> Self {
-        Aabb { min_x, min_y, max_x, max_y }
+        Aabb {
+            min_x,
+            min_y,
+            max_x,
+            max_y,
+        }
     }
 
     /// Returns `true` if this AABB overlaps `other` (inclusive boundary).
@@ -148,19 +153,37 @@ pub fn aabb_of(shape: &Shape2D) -> Aabb {
         },
         Shape2D::Polygon(p) => {
             if p.vertices.is_empty() {
-                return Aabb { min_x: 0.0, min_y: 0.0, max_x: 0.0, max_y: 0.0 };
+                return Aabb {
+                    min_x: 0.0,
+                    min_y: 0.0,
+                    max_x: 0.0,
+                    max_y: 0.0,
+                };
             }
             let mut min_x = f32::INFINITY;
             let mut min_y = f32::INFINITY;
             let mut max_x = f32::NEG_INFINITY;
             let mut max_y = f32::NEG_INFINITY;
             for v in &p.vertices {
-                if v.x < min_x { min_x = v.x; }
-                if v.y < min_y { min_y = v.y; }
-                if v.x > max_x { max_x = v.x; }
-                if v.y > max_y { max_y = v.y; }
+                if v.x < min_x {
+                    min_x = v.x;
+                }
+                if v.y < min_y {
+                    min_y = v.y;
+                }
+                if v.x > max_x {
+                    max_x = v.x;
+                }
+                if v.y > max_y {
+                    max_y = v.y;
+                }
             }
-            Aabb { min_x, min_y, max_x, max_y }
+            Aabb {
+                min_x,
+                min_y,
+                max_x,
+                max_y,
+            }
         }
         Shape2D::Line(l) => Aabb {
             min_x: l.start.x.min(l.end.x),

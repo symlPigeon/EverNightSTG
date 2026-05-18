@@ -136,9 +136,9 @@ impl TemplateRegistry {
     ///
     /// Returns `None` if the ID is out of range.  Each call produces fresh instances.
     pub fn instantiate(&self, id: u32) -> Option<Vec<Box<dyn Component>>> {
-        self.templates.get(id as usize).map(|factories| {
-            factories.iter().map(|f| f()).collect()
-        })
+        self.templates
+            .get(id as usize)
+            .map(|factories| factories.iter().map(|f| f()).collect())
     }
 
     pub fn is_registered(&self, name: &str) -> bool {
@@ -275,8 +275,14 @@ mod tests {
         );
         let components = reg.instantiate(id).expect("should return components");
         assert_eq!(components.len(), 2);
-        assert_eq!(components[0].as_any().downcast_ref::<Marker>(), Some(&Marker(1)));
-        assert_eq!(components[1].as_any().downcast_ref::<Other>(), Some(&Other(2)));
+        assert_eq!(
+            components[0].as_any().downcast_ref::<Marker>(),
+            Some(&Marker(1))
+        );
+        assert_eq!(
+            components[1].as_any().downcast_ref::<Other>(),
+            Some(&Other(2))
+        );
     }
 
     #[test]
@@ -290,15 +296,24 @@ mod tests {
     #[test]
     fn template_registry_re_register_keeps_id() {
         let mut reg = TemplateRegistry::new();
-        let id1 = reg.register("bullet", vec![
-            Box::new(|| Box::new(Marker(1)) as Box<dyn evernight_core::Component>),
-        ]);
-        let id2 = reg.register("bullet", vec![
-            Box::new(|| Box::new(Marker(99)) as Box<dyn evernight_core::Component>),
-        ]);
+        let id1 = reg.register(
+            "bullet",
+            vec![Box::new(|| {
+                Box::new(Marker(1)) as Box<dyn evernight_core::Component>
+            })],
+        );
+        let id2 = reg.register(
+            "bullet",
+            vec![Box::new(|| {
+                Box::new(Marker(99)) as Box<dyn evernight_core::Component>
+            })],
+        );
         assert_eq!(id1, id2, "re-registering same name must reuse the same id");
         let components = reg.instantiate(id1).unwrap();
-        assert_eq!(components[0].as_any().downcast_ref::<Marker>(), Some(&Marker(99)));
+        assert_eq!(
+            components[0].as_any().downcast_ref::<Marker>(),
+            Some(&Marker(99))
+        );
     }
 
     #[test]
@@ -310,9 +325,12 @@ mod tests {
     #[test]
     fn template_registry_each_instantiate_produces_fresh_instances() {
         let mut reg = TemplateRegistry::new();
-        let id = reg.register("bullet", vec![
-            Box::new(|| Box::new(Marker(42)) as Box<dyn evernight_core::Component>),
-        ]);
+        let id = reg.register(
+            "bullet",
+            vec![Box::new(|| {
+                Box::new(Marker(42)) as Box<dyn evernight_core::Component>
+            })],
+        );
         let a = reg.instantiate(id).unwrap();
         let b = reg.instantiate(id).unwrap();
         // Both should be equal in value, proving independent construction

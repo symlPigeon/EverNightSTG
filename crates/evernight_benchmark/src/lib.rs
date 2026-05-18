@@ -5,19 +5,19 @@ use std::time::{Duration, Instant};
 /// Per-phase timing breakdown for a single `World::step_profiled()` call.
 #[derive(Debug, Default, Clone)]
 pub struct WorldFrameProfile {
-    pub pre_update:        Duration,
-    pub spawn_commit:      Duration,
+    pub pre_update: Duration,
+    pub spawn_commit: Duration,
     pub post_spawn_commit: Duration,
-    pub pre_movement:      Duration,
-    pub movement:          Duration,
-    pub post_movement:     Duration,
-    pub pre_collision:     Duration,
-    pub collision:         Duration,
-    pub post_collision:    Duration,
-    pub pre_lifetime:      Duration,
-    pub lifetime:          Duration,
-    pub post_lifetime:     Duration,
-    pub post_update:       Duration,
+    pub pre_movement: Duration,
+    pub movement: Duration,
+    pub post_movement: Duration,
+    pub pre_collision: Duration,
+    pub collision: Duration,
+    pub post_collision: Duration,
+    pub pre_lifetime: Duration,
+    pub lifetime: Duration,
+    pub post_lifetime: Duration,
+    pub post_update: Duration,
 }
 
 /// Per-phase timing breakdown for a single `App::step_profiled()` call.
@@ -26,20 +26,20 @@ pub struct WorldFrameProfile {
 /// `post_collision` and `pre_lifetime` to capture the scripting engine cost.
 #[derive(Debug, Default, Clone)]
 pub struct AppFrameProfile {
-    pub pre_update:        Duration,
-    pub spawn_commit:      Duration,
+    pub pre_update: Duration,
+    pub spawn_commit: Duration,
     pub post_spawn_commit: Duration,
-    pub pre_movement:      Duration,
-    pub movement:          Duration,
-    pub post_movement:     Duration,
-    pub pre_collision:     Duration,
-    pub collision:         Duration,
-    pub post_collision:    Duration,
-    pub script_on_frame:   Duration,
-    pub pre_lifetime:      Duration,
-    pub lifetime:          Duration,
-    pub post_lifetime:     Duration,
-    pub post_update:       Duration,
+    pub pre_movement: Duration,
+    pub movement: Duration,
+    pub post_movement: Duration,
+    pub pre_collision: Duration,
+    pub collision: Duration,
+    pub post_collision: Duration,
+    pub script_on_frame: Duration,
+    pub pre_lifetime: Duration,
+    pub lifetime: Duration,
+    pub post_lifetime: Duration,
+    pub post_update: Duration,
 }
 
 /// Trait that allows [`ProfileAccumulator`] and display functions to work
@@ -57,19 +57,19 @@ pub trait FrameProfile {
 impl FrameProfile for WorldFrameProfile {
     fn phases(&self) -> Vec<(&'static str, Duration)> {
         vec![
-            ("pre_update",        self.pre_update),
-            ("spawn_commit",      self.spawn_commit),
+            ("pre_update", self.pre_update),
+            ("spawn_commit", self.spawn_commit),
             ("post_spawn_commit", self.post_spawn_commit),
-            ("pre_movement",      self.pre_movement),
-            ("movement",          self.movement),
-            ("post_movement",     self.post_movement),
-            ("pre_collision",     self.pre_collision),
-            ("collision",         self.collision),
-            ("post_collision",    self.post_collision),
-            ("pre_lifetime",      self.pre_lifetime),
-            ("lifetime",          self.lifetime),
-            ("post_lifetime",     self.post_lifetime),
-            ("post_update",       self.post_update),
+            ("pre_movement", self.pre_movement),
+            ("movement", self.movement),
+            ("post_movement", self.post_movement),
+            ("pre_collision", self.pre_collision),
+            ("collision", self.collision),
+            ("post_collision", self.post_collision),
+            ("pre_lifetime", self.pre_lifetime),
+            ("lifetime", self.lifetime),
+            ("post_lifetime", self.post_lifetime),
+            ("post_update", self.post_update),
         ]
     }
 }
@@ -77,20 +77,20 @@ impl FrameProfile for WorldFrameProfile {
 impl FrameProfile for AppFrameProfile {
     fn phases(&self) -> Vec<(&'static str, Duration)> {
         vec![
-            ("pre_update",        self.pre_update),
-            ("spawn_commit",      self.spawn_commit),
+            ("pre_update", self.pre_update),
+            ("spawn_commit", self.spawn_commit),
             ("post_spawn_commit", self.post_spawn_commit),
-            ("pre_movement",      self.pre_movement),
-            ("movement",          self.movement),
-            ("post_movement",     self.post_movement),
-            ("pre_collision",     self.pre_collision),
-            ("collision",         self.collision),
-            ("post_collision",    self.post_collision),
-            ("script_on_frame",   self.script_on_frame),
-            ("pre_lifetime",      self.pre_lifetime),
-            ("lifetime",          self.lifetime),
-            ("post_lifetime",     self.post_lifetime),
-            ("post_update",       self.post_update),
+            ("pre_movement", self.pre_movement),
+            ("movement", self.movement),
+            ("post_movement", self.post_movement),
+            ("pre_collision", self.pre_collision),
+            ("collision", self.collision),
+            ("post_collision", self.post_collision),
+            ("script_on_frame", self.script_on_frame),
+            ("pre_lifetime", self.pre_lifetime),
+            ("lifetime", self.lifetime),
+            ("post_lifetime", self.post_lifetime),
+            ("post_update", self.post_update),
         ]
     }
 }
@@ -100,12 +100,12 @@ impl FrameProfile for AppFrameProfile {
 /// Descriptive statistics for a set of duration samples.
 #[derive(Debug, Clone)]
 pub struct Stats {
-    pub min:  Duration,
-    pub max:  Duration,
+    pub min: Duration,
+    pub max: Duration,
     pub mean: Duration,
-    pub p50:  Duration,
-    pub p95:  Duration,
-    pub p99:  Duration,
+    pub p50: Duration,
+    pub p95: Duration,
+    pub p99: Duration,
 }
 
 impl Stats {
@@ -120,12 +120,12 @@ impl Stats {
         // percentile index: saturate so index 0 maps to first element
         let idx = |pct: usize| sorted[(n * pct).saturating_sub(1) / 100];
         Self {
-            min:  sorted[0],
-            max:  sorted[n - 1],
+            min: sorted[0],
+            max: sorted[n - 1],
             mean: sum / n as u32,
-            p50:  idx(50),
-            p95:  idx(95),
-            p99:  idx(99),
+            p50: idx(50),
+            p95: idx(95),
+            p99: idx(99),
         }
     }
 }
@@ -238,7 +238,12 @@ pub fn bench<F: FnMut()>(
     for _ in 0..iterations {
         f();
     }
-    BenchResult { name, warmup, iterations, total: start.elapsed() }
+    BenchResult {
+        name,
+        warmup,
+        iterations,
+        total: start.elapsed(),
+    }
 }
 
 // ── Display ───────────────────────────────────────────────────────────────────
@@ -253,7 +258,10 @@ pub fn print_results(results: &[BenchResult]) {
     for r in results {
         println!(
             "{:<48} {:>8} {:>14.2} {:>12.0}",
-            r.name, r.iterations, r.us_per_iter(), r.iters_per_sec(),
+            r.name,
+            r.iterations,
+            r.us_per_iter(),
+            r.iters_per_sec(),
         );
     }
     println!();
@@ -285,7 +293,11 @@ pub fn print_profile_report<P: FrameProfile>(name: &str, acc: &ProfileAccumulato
 
     for (phase, stats) in &phase_stats {
         let mean_us = dur_us(stats.mean);
-        let pct = if total_mean_us > 0.0 { mean_us / total_mean_us * 100.0 } else { 0.0 };
+        let pct = if total_mean_us > 0.0 {
+            mean_us / total_mean_us * 100.0
+        } else {
+            0.0
+        };
         println!(
             "{:<24} {:>9.2} {:>9.2} {:>9.2} {:>9.2} {:>9.2} {:>9.2} {:>5.1}%",
             phase,
