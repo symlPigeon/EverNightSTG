@@ -3,10 +3,13 @@ use std::{any::TypeId, collections::HashMap};
 use evernight_core::Component;
 use mlua::{Lua, Table};
 
+pub type LuaToTableFn = Box<dyn Fn(&dyn Component, &Lua) -> mlua::Result<Table>>;
+pub type LuaFromTableFn = Box<dyn Fn(&Table) -> mlua::Result<Box<dyn Component>>>;
+
 pub(crate) struct LuaComponentEntry {
     pub(crate) type_id: TypeId,
-    pub(crate) to_table: Box<dyn Fn(&dyn Component, &Lua) -> mlua::Result<Table>>,
-    pub(crate) from_table: Box<dyn Fn(&Table) -> mlua::Result<Box<dyn Component>>>,
+    pub(crate) to_table: LuaToTableFn,
+    pub(crate) from_table: LuaFromTableFn,
 }
 
 /// Registry that maps component names to Lua serialization/deserialization callbacks.
@@ -50,16 +53,14 @@ impl LuaComponentRegistry {
         FTo: Fn(&T, &Lua) -> mlua::Result<Table> + 'static,
         FFrom: Fn(&Table) -> mlua::Result<T> + 'static,
     {
-        let to: Box<dyn Fn(&dyn Component, &Lua) -> mlua::Result<Table>> =
-            Box::new(move |comp, lua| {
-                let concrete = comp
-                    .as_any()
-                    .downcast_ref::<T>()
-                    .expect("component type mismatch in to_table");
-                to_table(concrete, lua)
-            });
-        let from: Box<dyn Fn(&Table) -> mlua::Result<Box<dyn Component>>> =
-            Box::new(move |t| from_table(t).map(|c| Box::new(c) as Box<dyn Component>));
+        let to: LuaToTableFn = Box::new(move |comp, lua| {
+            let concrete = comp
+                .as_any()
+                .downcast_ref::<T>()
+                .expect("component type mismatch in to_table");
+            to_table(concrete, lua)
+        });
+        let from: LuaFromTableFn = Box::new(move |t| from_table(t).map(|c| Box::new(c) as Box<dyn Component>));
         self.entries.insert(
             name.to_string(),
             LuaComponentEntry {

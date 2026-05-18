@@ -187,11 +187,11 @@ fn circle_rectangle(
     let mut min_dist = circle.center.distance_to(corners[0]);
 
     // Check all corners
-    for i in 1..4 {
-        let dist = circle.center.distance_to(corners[i]);
+    for corner in corners.iter().skip(1) {
+        let dist = circle.center.distance_to(*corner);
         if dist < min_dist {
             min_dist = dist;
-            closest_point = corners[i];
+            closest_point = *corner;
         }
     }
 
@@ -329,8 +329,8 @@ fn project_polygon(axis: &Vec2, polygon: &[Vec2; 4]) -> (f32, f32) {
     let mut min_proj = polygon[0].dot(*axis);
     let mut max_proj = min_proj;
 
-    for i in 1..4 {
-        let proj = polygon[i].dot(*axis);
+    for vertex in polygon.iter().skip(1) {
+        let proj = vertex.dot(*axis);
         if proj < min_proj {
             min_proj = proj;
         }

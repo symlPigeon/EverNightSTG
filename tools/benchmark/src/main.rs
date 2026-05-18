@@ -515,9 +515,11 @@ fn run_profile_benchmarks() {
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
+type BenchFn = fn() -> BenchResult;
+
 /// All registered benchmarks in declaration order.
 /// Name must match the string passed to `bench(...)` inside each function.
-const ALL: &[(&str, fn() -> BenchResult)] = &[
+const ALL: &[(&str, BenchFn)] = &[
     ("world_step_empty",                    bm_world_step_empty),
     ("world_step_1k_entities",              bm_world_step_1k_entities),
     ("world_step_10k_entities",             bm_world_step_10k_entities),

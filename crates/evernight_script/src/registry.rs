@@ -36,9 +36,11 @@ impl TagRegistry {
     }
 }
 
+pub type ComponentFactoryFn = Box<dyn Fn(&[u8]) -> Box<dyn Component>>;
+
 #[derive(Default)]
 pub struct ComponentRegistry {
-    factories: HashMap<String, Box<dyn Fn(&[u8]) -> Box<dyn Component>>>,
+    factories: HashMap<String, ComponentFactoryFn>,
 }
 
 impl ComponentRegistry {

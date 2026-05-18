@@ -100,11 +100,10 @@ impl INode for EvernightBridge {
         engine.set_render_sender(tx);
 
         let src = self.lua_source.to_string();
-        if !src.is_empty() {
-            if let Err(e) = engine.load(&src) {
+        if !src.is_empty()
+            && let Err(e) = engine.load(&src) {
                 godot_error!("[Evernight] Script error: {e:?}");
             }
-        }
 
         // ── ECS App ───────────────────────────────────────────────────────
         let mut app = App::new(FixedStep::new_60hz());
@@ -151,11 +150,10 @@ impl INode for EvernightBridge {
         }
 
         // Step ECS (Lua on_frame runs here, enqueuing RenderCommands)
-        if let Some(app) = &mut self.app {
-            if let Err(e) = app.step() {
+        if let Some(app) = &mut self.app
+            && let Err(e) = app.step() {
                 godot_error!("[Evernight] ECS step error: {e:?}");
             }
-        }
 
         // Drain and apply render commands produced this frame
         let Some(rx) = self.receiver.take() else {

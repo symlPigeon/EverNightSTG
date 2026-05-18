@@ -7,7 +7,7 @@ use crate::{
 
 /// Runs every [`SystemEntry`] in `entries` in priority order, passing the common frame resources.
 fn run_phase(
-    entries: &mut Vec<SystemEntry>,
+    entries: &mut [SystemEntry],
     storage: &mut ComponentStorage,
     event_bus: &mut EventBus,
     cmd_buf: &mut CommandBuffer,
@@ -18,6 +18,9 @@ fn run_phase(
         (entry.system)(storage, event_bus, cmd_buf, tick, dt);
     }
 }
+
+type SpawnComponentResolverFn<'a> = dyn Fn(&str, &[u8]) -> Option<Box<dyn Component>> + 'a;
+type SpawnTemplateResolverFn<'a> = dyn Fn(u32) -> Option<Vec<Box<dyn Component>>> + 'a;
 
 #[derive(Debug, Clone, Copy)]
 pub struct FixedStep {
@@ -174,30 +177,30 @@ impl World {
 
     /// Drains and applies all buffered commands.
     ///
-    /// `component_factory` is an optional callback used to instantiate components listed in a
+    /// `component_resolver` is an optional callback used to instantiate components listed in a
     /// [`SpawnRequest`]. If `None` (or if the factory returns `None` for a given name), the
     /// component is silently skipped. Pass `Some(&registry.create_fn())` from the script layer.
     ///
     /// Emits `Spawned` / `Despawned` events as side-effects.
     pub fn commit_commands(
         &mut self,
-        component_factory: Option<&dyn Fn(&str, &[u8]) -> Option<Box<dyn Component>>>,
-        template_factory: Option<&dyn Fn(u32) -> Option<Vec<Box<dyn Component>>>>,
+        component_resolver: Option<&SpawnComponentResolverFn<'_>>,
+        template_resolver: Option<&SpawnTemplateResolverFn<'_>>,
     ) -> EverNightResult<()> {
         let commands = self.command_buffer.drain();
         for command in commands {
             match command {
                 Command::Spawn { entity, request } => {
                     // Named components from the request itself
-                    if let Some(factory) = component_factory {
+                    if let Some(resolver) = component_resolver {
                         for (name, data) in request.components() {
-                            if let Some(component) = factory(name, data) {
+                            if let Some(component) = resolver(name, data) {
                                 self.component_storage.insert_boxed(entity, component);
                             }
                         }
                     }
                     // Template components (applied after named, so they can be overridden)
-                    if let Some(tf) = template_factory
+                    if let Some(tf) = template_resolver
                         && let Some(tid) = request.template_id()
                             && let Some(components) = tf(tid) {
                                 for component in components {
