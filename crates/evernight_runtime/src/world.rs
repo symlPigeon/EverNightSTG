@@ -281,6 +281,44 @@ impl World {
         bounded_system(&mut self.component_storage);
     }
 
+    /// Returns a read-only reference to the component storage.
+    ///
+    /// Use this together with [`run_storage_system`] or [`despawn_entities_batch`] to wire
+    /// behaviors that need to inspect components before mutating world state.
+    pub fn component_storage(&self) -> &ComponentStorage {
+        &self.component_storage
+    }
+
+    /// Runs an arbitrary system function that only needs mutable access to component storage.
+    ///
+    /// This is the preferred way to invoke optional gameplay behaviors (wrap, etc.) from an
+    /// `App::register_behavior` closure without adding a dedicated `run_xxx_system` method for
+    /// every new behavior:
+    /// ```ignore
+    /// app.register_behavior(Phase::PostMovement, PRIORITY_BUILTIN,
+    ///     Box::new(|world| world.run_storage_system(wrap_system)));
+    /// ```
+    pub fn run_storage_system(&mut self, mut f: impl FnMut(&mut ComponentStorage)) {
+        f(&mut self.component_storage);
+    }
+
+    /// Despawns a batch of entities: removes all components, releases their IDs, and emits
+    /// [`EventPayload::Despawned`] for each one.
+    ///
+    /// Shared by `run_lifetime_system` and any behavior (e.g. despawn-on-exit) that resolves
+    /// a list of entities to remove at the system-function level.
+    pub fn despawn_entities_batch(&mut self, ids: Vec<EntityId>) -> EverNightResult<()> {
+        for entity in ids {
+            self.component_storage.remove_all(entity);
+            self.id_allocator.deallocate(entity)?;
+            self.event_bus.push(EventPayload::Despawned {
+                entity,
+                tick: self.tick,
+            });
+        }
+        Ok(())
+    }
+
     /// Runs the collision system (broad-phase + narrow-phase, emits Collision events).
     pub fn run_collision_system(&mut self) {
         collision_system(&mut self.component_storage, &mut self.event_bus, self.tick);
@@ -317,11 +355,7 @@ impl World {
     /// Runs the lifetime system and immediately despawns expired entities.
     pub fn run_lifetime_system(&mut self) -> EverNightResult<()> {
         let expired = lifetime_system(&mut self.component_storage, &mut self.event_bus, self.tick);
-        for entity in expired {
-            self.component_storage.remove_all(entity);
-            self.id_allocator.deallocate(entity)?;
-        }
-        Ok(())
+        self.despawn_entities_batch(expired)
     }
 
     /// Advances the tick counter and returns the step result.

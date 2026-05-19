@@ -20,7 +20,8 @@ mod tests {
     use evernight_math::{Angle, Circle, Shape2D, Vec2};
 
     use crate::{
-        FixedStep, Hitbox, Hurtbox, Lifetime, Phase, Scheduler, Transform, Velocity, World,
+        DespawnBounds, FixedStep, Hitbox, Hurtbox, Lifetime, Phase, Scheduler, Transform,
+        Velocity, WrapBounds, World, despawn_out_of_bounds_system, wrap_system,
     };
 
     fn make_world() -> World {
@@ -103,6 +104,55 @@ mod tests {
         world.remove_component::<Transform>(entity).unwrap();
         world.step(&mut sched).unwrap();
 
+        assert!(world.get_component::<Transform>(entity).is_none());
+    }
+
+    // ── boundary behaviors ──────────────────────────────────────────────────
+
+    #[test]
+    fn wrap_boundary_moves_entity_back_into_world() {
+        let mut world = make_world();
+        let mut sched = no_hooks();
+
+        let entity = world.spawn_entity(SpawnRequest::new()).unwrap();
+        world.add_component(entity, Transform::identity()).unwrap();
+        world.add_component(entity, WrapBounds::new(10.0, 10.0)).unwrap();
+        world.step(&mut sched).unwrap();
+
+        {
+            let tf = world.get_component_mut::<Transform>(entity).unwrap();
+            tf.position.x = 13.0;
+            tf.position.y = -12.5;
+        }
+
+        world.run_storage_system(wrap_system);
+
+        let pos = world.get_component::<Transform>(entity).unwrap().position;
+        assert!((pos.x + 7.0).abs() < 1e-6);
+        assert!((pos.y - 7.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn despawn_boundary_removes_entity_outside_bounds() {
+        let mut world = make_world();
+        let mut sched = no_hooks();
+
+        let entity = world.spawn_entity(SpawnRequest::new()).unwrap();
+        world.add_component(entity, Transform::identity()).unwrap();
+        world
+            .add_component(entity, DespawnBounds::new(10.0, 10.0))
+            .unwrap();
+        world.step(&mut sched).unwrap();
+
+        {
+            let tf = world.get_component_mut::<Transform>(entity).unwrap();
+            tf.position.x = 11.0;
+        }
+
+        let to_despawn = despawn_out_of_bounds_system(world.component_storage());
+        world.despawn_entities_batch(to_despawn).unwrap();
+
+        assert!(!world.is_alive(entity));
         assert!(world.get_component::<Transform>(entity).is_none());
     }
 
